@@ -1,0 +1,315 @@
+openapi: 3.0.3
+info:
+  title: Keto Meal Plan Generator - Recovery API
+  description: |
+    Public API for PDF recovery via magic links and account dashboard.
+
+    **Functional Requirements Covered**:
+    - FR-R-001: Optional account creation (3 touchpoints)
+    - FR-R-002: Magic link generation (256-bit, single-use, 24h expiry)
+    - FR-R-003: Vercel Blob signed URLs
+    - FR-R-005: Download rate limiting (10/24h)
+    - FR-E-007: Public recovery page
+
+  version: 1.0.0
+
+servers:
+  - url: https://api.ketomealplan.com/v1
+    description: Production
+  - url: http://localhost:8000/v1
+    description: Local development
+
+tags:
+  - name: Recovery
+    description: PDF recovery without password
+  - name: Account
+    description: Optional account management
+
+paths:
+  /recover-plan:
+    post:
+      summary: Request magic link for PDF recovery (FR-E-007, FR-R-002)
+      description: |
+        Public endpoint for users who lost email or don't have account.
+
+        **Security**:
+        - Rate limit: 5 requests per IP per hour (prevents enumeration)
+        - Magic link: 256-bit token, 24-hour expiry, single-use
+        - Rate limit magic link requests: 3 per email per 24h
+
+      tags:
+        - Recovery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+              required:
+                - email
+      responses:
+        '200':
+          description: |
+            Magic link sent (or generic success if email not found - prevents enumeration)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "If a meal plan exists for this email, you'll receive a magic link within 5 minutes."
+        '429':
+          description: Rate limit exceeded (5 per IP per hour OR 3 per email per 24h)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /verify-magic-link:
+    get:
+      summary: Verify magic link token (FR-R-002)
+      description: |
+        Verify and consume magic link token.
+
+        **Security Checks**:
+        1. Token exists and not expired (24h)
+        2. Single-use enforcement (mark used_at)
+        3. IP logging (warn on mismatch but allow)
+
+      tags:
+        - Recovery
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{64}$'
+            description: 64-character hex token (256 bits)
+      responses:
+        '200':
+          description: Valid magic link - grant 24h session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_granted:
+                    type: boolean
+                    example: true
+                  meal_plan_id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                    format: email
+                  expires_at:
+                    type: string
+                    format: date-time
+                    description: Magic link session expiry (24h from first use)
+        '401':
+          description: Invalid, expired, or already used token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+                example:
+                  error: "Link already used. Please request a new one."
+
+  /download-pdf/{meal_plan_id}:
+    get:
+      summary: Download PDF with rate limiting (FR-R-005)
+      description: |
+        Download meal plan PDF via Vercel Blob signed URL redirect.
+
+        **Rate Limiting** (FR-R-005):
+        - Authenticated users: 10 downloads/24h per user_id
+        - Magic link users: 10 downloads/24h per email+IP hash
+        - Grace period: No limit first 5 minutes after delivery
+
+      tags:
+        - Recovery
+      security:
+        - BearerAuth: []  # Optional (magic link OR account session)
+      parameters:
+        - name: meal_plan_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '302':
+          description: Redirect to Vercel Blob signed URL
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+                example: "https://blob.vercel-storage.com/abc123.pdf?signature=xyz..."
+        '404':
+          description: Meal plan not found or expired (>90 days)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded (10/24h)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+                example:
+                  error: "Download limit reached (10 per day). Please try again in 8 hours."
+
+  /account/create:
+    post:
+      summary: Create optional account (FR-R-001)
+      description: |
+        Create account at one of 3 touchpoints:
+        1. Mid-quiz (Step 10) - enables cross-device sync
+        2. Post-purchase success page
+        3. Email link after PDF delivery
+
+        **Email Enforcement**: Account email MUST match purchase email.
+
+      tags:
+        - Account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Must match purchase email (readonly if from touchpoint 2/3)
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                signup_token:
+                  type: string
+                  description: Signed token from email link (touchpoint 3) encoding purchase_email
+              required:
+                - email
+                - password
+      responses:
+        '201':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  access_token:
+                    type: string
+                    description: JWT for authenticated API calls
+        '400':
+          description: Email mismatch or invalid signup token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+                example:
+                  error: "Account must use purchase email: user@example.com"
+
+  /account/dashboard:
+    get:
+      summary: Get dashboard data (FR-R-004)
+      description: |
+        Retrieve user's meal plan with download button and availability status.
+
+      tags:
+        - Account
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email:
+                    type: string
+                  meal_plan:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      created_at:
+                        type: string
+                        format: date-time
+                      calorie_target:
+                        type: integer
+                      days_remaining:
+                        type: integer
+                        description: Days until 90-day expiration
+                        example: 67
+                      download_available:
+                        type: boolean
+                        example: true
+        '401':
+          description: Unauthorized (invalid or expired JWT)
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+      required:
+        - error
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token for authenticated users OR magic link session token
+
+x-security-notes:
+  magic-link-token-format:
+    description: |
+      Magic link tokens (FR-R-002):
+      - Generation: secrets.token_bytes(32).hex() = 64-char hex string
+      - Storage: SHA256 hash of token stored in database
+      - Lookup: Hash incoming token, query token_hash column
+      - Single-use: Set used_at on first verification
+      - Expiration: created_at + 24 hours
+      - IP logging: Record generation_ip and usage_ip (warn on mismatch)
+
+  rate-limiting-keys:
+    description: |
+      Redis keys for rate limiting (FR-R-005):
+      - Authenticated: "download_limit:user:{user_id}:{YYYY-MM-DD}"
+      - Magic link: "download_limit:guest:{email+IP hash}:{YYYY-MM-DD}"
+      - Recovery requests: "recovery_limit:ip:{ip_address}:{YYYY-MM-DD-HH}"
+      - Magic link requests: "magic_limit:email:{normalized_email}:{YYYY-MM-DD}"
+      - All keys have 24h TTL
+
+  email-normalization:
+    description: |
+      All email lookups use normalized_email (FR-P-010):
+      - Lowercase all characters
+      - Gmail: remove dots, strip +tags, googlemail.com → gmail.com
+      - Example: User.Name+tag@Gmail.com → username@gmail.com

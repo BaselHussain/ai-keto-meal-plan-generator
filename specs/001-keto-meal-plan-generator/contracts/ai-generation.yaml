@@ -1,0 +1,370 @@
+openapi: 3.0.3
+info:
+  title: Keto Meal Plan Generator - AI Generation (Internal Service)
+  description: |
+    Internal API contract for AI meal plan generation service.
+    Not exposed publicly - called by webhook handlers.
+
+    **Functional Requirements Covered**:
+    - FR-A-001 to FR-A-015: AI generation with OpenAI Agents SDK
+    - FR-D-001 to FR-D-008: PDF generation and Vercel Blob upload
+    - FR-E-001 to FR-E-007: Email delivery with retry logic
+
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/internal
+    description: Internal service (not publicly exposed)
+
+tags:
+  - name: AI Generation
+    description: Internal meal plan generation pipeline
+
+paths:
+  /internal/generate-meal-plan:
+    post:
+      summary: Generate meal plan and deliver via email (FR-A-001)
+      description: |
+        Internal endpoint triggered by payment webhook.
+
+        **Pipeline** (FR-A-006: 20s AI timeout, FR-D-004: 20s PDF timeout):
+        1. Generate meal plan via OpenAI Agents SDK
+        2. Validate keto compliance (<30g carbs/day)
+        3. Validate structural integrity (30 days, 3 meals each)
+        4. Generate PDF with ReportLab
+        5. Upload to Vercel Blob
+        6. Send email via Resend
+        7. Update meal_plan record
+
+      tags:
+        - AI Generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerationRequest'
+      responses:
+        '200':
+          description: Meal plan generated and delivered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationResponse'
+        '422':
+          description: Validation failed (keto compliance or structure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '500':
+          description: Generation failed (route to manual resolution)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /internal/validate-meal-plan:
+    post:
+      summary: Validate AI output (FR-A-007, FR-A-015)
+      description: |
+        Validate meal plan against keto compliance and structural integrity.
+
+        **Checks**:
+        - Keto compliance: All 30 days <30g net carbs
+        - Structure: Exactly 30 days, 3 meals each (breakfast, lunch, dinner)
+        - Required fields: All nutritional data populated
+        - JSON parseable
+
+      tags:
+        - AI Generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MealPlanValidationRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+
+components:
+  schemas:
+    GenerationRequest:
+      type: object
+      properties:
+        payment_id:
+          type: string
+          example: "pay_01h2x3y4z5a6b7c8d9e0f1"
+        email:
+          type: string
+          format: email
+        calorie_target:
+          type: integer
+          example: 1650
+        preferences:
+          $ref: '#/components/schemas/PreferencesSummary'
+      required:
+        - payment_id
+        - email
+        - calorie_target
+        - preferences
+
+    PreferencesSummary:
+      type: object
+      description: Derived from quiz_responses (FR-A-014)
+      properties:
+        excluded_foods:
+          type: array
+          items:
+            type: string
+          example: ["beef", "pork", "rice", "pasta"]
+        preferred_proteins:
+          type: array
+          items:
+            type: string
+          example: ["chicken", "salmon", "shrimp"]
+        dietary_restrictions:
+          type: string
+          example: "No dairy from cows. Prefer coconut-based alternatives."
+      required:
+        - excluded_foods
+        - preferred_proteins
+        - dietary_restrictions
+
+    GenerationResponse:
+      type: object
+      properties:
+        meal_plan_id:
+          type: string
+          format: uuid
+        pdf_url:
+          type: string
+          format: uri
+          description: Vercel Blob signed URL
+        ai_model:
+          type: string
+          example: "gpt-4o"
+        generation_time_ms:
+          type: integer
+          example: 18500
+        status:
+          type: string
+          enum: [completed, failed, manual_resolution]
+      required:
+        - meal_plan_id
+        - status
+
+    MealPlanValidationRequest:
+      type: object
+      properties:
+        meal_plan:
+          $ref: '#/components/schemas/MealPlanStructure'
+      required:
+        - meal_plan
+
+    MealPlanStructure:
+      type: object
+      description: Expected AI output structure (FR-A-015)
+      properties:
+        days:
+          type: array
+          minItems: 30
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/DayMealPlan'
+        shopping_lists:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/WeeklyShoppingList'
+      required:
+        - days
+        - shopping_lists
+
+    DayMealPlan:
+      type: object
+      properties:
+        day:
+          type: integer
+          minimum: 1
+          maximum: 30
+        meals:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/Meal'
+        total_carbs:
+          type: integer
+          description: Must be <30g for keto compliance
+          maximum: 30
+        total_protein:
+          type: integer
+        total_fat:
+          type: integer
+        total_calories:
+          type: integer
+      required:
+        - day
+        - meals
+        - total_carbs
+        - total_protein
+        - total_fat
+        - total_calories
+
+    Meal:
+      type: object
+      properties:
+        name:
+          type: string
+          enum: [breakfast, lunch, dinner]
+        recipe:
+          type: string
+          example: "Avocado & Bacon Scramble"
+        ingredients:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+        prep_time:
+          type: integer
+          maximum: 30
+          description: Minutes
+        carbs:
+          type: integer
+        protein:
+          type: integer
+        fat:
+          type: integer
+        calories:
+          type: integer
+      required:
+        - name
+        - recipe
+        - ingredients
+        - prep_time
+        - carbs
+        - protein
+        - fat
+        - calories
+
+    WeeklyShoppingList:
+      type: object
+      properties:
+        week:
+          type: integer
+          minimum: 1
+          maximum: 4
+        proteins:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ingredient'
+        vegetables:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ingredient'
+        dairy:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ingredient'
+        fats:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ingredient'
+        pantry:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ingredient'
+      required:
+        - week
+        - proteins
+        - vegetables
+
+    Ingredient:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Chicken breast"
+        quantity:
+          type: string
+          example: "2 lbs"
+      required:
+        - name
+        - quantity
+
+    ValidationResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        keto_compliant:
+          type: boolean
+        structure_valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: string
+          example: ["Day 5 exceeds 30g carbs (32g)", "Missing dinner for Day 12"]
+      required:
+        - valid
+        - keto_compliant
+        - structure_valid
+
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Keto compliance validation failed"
+        validation_errors:
+          type: array
+          items:
+            type: string
+        retry_count:
+          type: integer
+          description: Number of retries attempted (FR-A-007)
+      required:
+        - error
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+
+x-retry-policy:
+  keto-compliance-failure:
+    max_retries: 2
+    description: |
+      If keto validation fails (any day >30g carbs):
+      - Retry up to 2 times (3 total attempts)
+      - Append guidance to prompt: "CRITICAL: Previous attempt had {day} with {carbs}g carbs. Must be <30g."
+      - If all retries fail, route to manual_resolution (FR-M-001)
+
+  structural-failure:
+    max_retries: 1
+    description: |
+      If structural validation fails (wrong number of days/meals):
+      - Retry up to 1 time (2 total attempts)
+      - If retry fails, route to manual_resolution
+
+  ai-timeout:
+    strategy: exponential_backoff
+    initial_delay_ms: 2000
+    max_delay_ms: 8000
+    max_retries: 3
+    description: |
+      If AI generation times out (>20s):
+      - Retry with backoff: 2s, 4s, 8s
+      - After 3 failures, fallback to Gemini (if not already using)
+      - If both providers fail, route to manual_resolution (FR-A-011)

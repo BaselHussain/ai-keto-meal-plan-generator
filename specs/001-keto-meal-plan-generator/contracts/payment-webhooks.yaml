@@ -1,0 +1,224 @@
+openapi: 3.0.3
+info:
+  title: Keto Meal Plan Generator - Payment Webhooks
+  description: |
+    Paddle webhook endpoints for payment processing, chargebacks, and refunds.
+
+    **Functional Requirements Covered**:
+    - FR-P-002: HMAC-SHA256 + timestamp validation
+    - FR-P-008: Quiz response polling (5s grace period)
+    - FR-P-009: Chargeback handling and blacklisting
+    - FR-P-012: Automatic refund with payment method compatibility check
+    - FR-M-001 to FR-M-006: Manual resolution queue
+
+  version: 1.0.0
+
+servers:
+  - url: https://api.ketomealplan.com
+    description: Production (Paddle webhook destination)
+
+tags:
+  - name: Paddle Webhooks
+    description: Incoming webhooks from Paddle payment processor
+
+paths:
+  /webhooks/paddle:
+    post:
+      summary: Handle all Paddle webhook events
+      description: |
+        Central endpoint for Paddle webhook events with dual validation:
+        1. HMAC-SHA256 signature verification
+        2. Timestamp validation (5-minute window)
+
+        **Security** (FR-P-002):
+        - Verify Paddle-Signature header using webhook secret
+        - Reject if |current_time - webhook_timestamp| > 300 seconds
+        - Alert on >3 failures per hour (potential attack)
+
+        **Idempotency**: Uses payment_id unique constraint to prevent duplicate processing
+
+      tags:
+        - Paddle Webhooks
+      parameters:
+        - name: Paddle-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: HMAC-SHA256 signature from Paddle
+        - name: Paddle-Timestamp
+          in: header
+          required: true
+          schema:
+            type: integer
+          description: Unix timestamp of webhook creation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/PaymentSuccessEvent'
+                - $ref: '#/components/schemas/ChargebackEvent'
+                - $ref: '#/components/schemas/RefundEvent'
+              discriminator:
+                propertyName: event_type
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, already_processed, manual_resolution]
+        '401':
+          description: Signature or timestamp validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal error (Paddle will retry)
+
+components:
+  schemas:
+    PaymentSuccessEvent:
+      type: object
+      description: Payment successful webhook (FR-P-008)
+      properties:
+        event_type:
+          type: string
+          enum: [payment.succeeded]
+        payment_id:
+          type: string
+          example: "pay_01h2x3y4z5a6b7c8d9e0f1"
+        customer_email:
+          type: string
+          format: email
+          example: "user@example.com"
+        amount:
+          type: number
+          example: 29.99
+        currency:
+          type: string
+          example: "USD"
+        payment_method:
+          type: string
+          description: Payment method type (for refund compatibility - FR-P-012)
+          enum: [card, apple_pay, google_pay, ideal, alipay, bank_transfer]
+          example: "card"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-12-30T12:34:56Z"
+      required:
+        - event_type
+        - payment_id
+        - customer_email
+        - amount
+        - payment_method
+
+    ChargebackEvent:
+      type: object
+      description: Chargeback received (FR-P-009)
+      properties:
+        event_type:
+          type: string
+          enum: [payment.chargeback]
+        payment_id:
+          type: string
+          example: "pay_01h2x3y4z5a6b7c8d9e0f1"
+        customer_email:
+          type: string
+          format: email
+        amount:
+          type: number
+        reason:
+          type: string
+          example: "fraudulent"
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - event_type
+        - payment_id
+        - customer_email
+
+    RefundEvent:
+      type: object
+      description: Refund processed (manual or automatic)
+      properties:
+        event_type:
+          type: string
+          enum: [payment.refunded]
+        payment_id:
+          type: string
+        refund_amount:
+          type: number
+        refund_reason:
+          type: string
+          example: "sla_missed"
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - event_type
+        - payment_id
+        - refund_amount
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+      required:
+        - error
+
+  securitySchemes: {}
+
+x-webhook-flows:
+  payment-success:
+    description: |
+      **Flow** (FR-P-008, FR-P-013, FR-A-001 to FR-A-015):
+      1. Verify HMAC + timestamp (401 if invalid)
+      2. Check idempotency (payment_id unique constraint in payment_transactions)
+      3. Create payment_transactions record (FR-P-013):
+         - Extract: payment_id, amount, currency, payment_method, customer_email, paddle_created_at
+         - Normalize email per FR-P-010
+         - Store with payment_status = "succeeded", webhook_received_at = NOW()
+         - meal_plan_id initially NULL (updated after meal plan creation)
+      4. Poll for quiz_responses (10 retries × 500ms = 5s grace period)
+      5. If quiz missing after polling:
+         - Create manual_resolution queue entry (FR-M-001)
+         - Send recovery email to user (FR-M-003)
+         - Return 200 (prevent Paddle retries)
+      6. If quiz found:
+         - Create meal_plan record with status = "processing"
+         - Update payment_transactions.meal_plan_id (link to meal plan)
+         - Trigger AI meal plan generation (background task)
+         - Return 200
+
+  chargeback:
+    description: |
+      **Flow** (FR-P-009, FR-P-013):
+      1. Log chargeback event (payment_id, email, reason, timestamp)
+      2. Update payment_transactions.payment_status = "chargeback" (FR-P-013)
+      3. Add normalized_email to email_blacklist (90-day TTL)
+      4. Keep PDF accessible (no URL revocation complexity)
+      5. Alert finance team via Sentry
+      6. Return 200
+
+  refund:
+    description: |
+      **Flow** (FR-P-012, FR-P-013, FR-M-004):
+      1. Log refund event
+      2. Update payment_transactions.payment_status = "refunded" (FR-P-013)
+      3. Update meal_plan.status = "refunded"
+      4. Increment meal_plan.refund_count (for abuse tracking FR-P-011)
+      5. If refund_count ≥ 2 in 90 days, flag next purchase for manual review
+      6. Return 200
