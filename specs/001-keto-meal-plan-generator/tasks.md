@@ -145,9 +145,9 @@ pytest backend/tests/security/ -v
 
 ### 2.2 Database Migrations
 
-- [ ] [T020] Generate initial Alembic migration for all 7 tables at `database/migrations/versions/001_initial_schema.py` (users, quiz_responses, meal_plans, payment_transactions, manual_resolution, magic_link_tokens, email_blacklist)
-- [ ] [T021] Run migration against Neon DB dev environment and verify schema creation
-- [ ] [T022] Create migration rollback test to ensure down() functions work correctly
+- [x] [T020] Generate initial Alembic migration for all 7 tables at `database/migrations/versions/001_initial_schema.py` (users, quiz_responses, meal_plans, payment_transactions, manual_resolution, magic_link_tokens, email_blacklist)
+- [x] [T021] Run migration against Neon DB dev environment and verify schema creation
+- [x] [T022] Create migration rollback test to ensure down() functions work correctly
 
 **Acceptance**: Database schema matches data-model.md, all indexes and constraints present
 
