@@ -58,10 +58,21 @@ if DATABASE_URL:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# When models are created in Phase 2, import them here:
-# from database.models import Base
-# target_metadata = Base.metadata
-target_metadata = None
+# Import Base and all models for autogenerate to detect schema
+from src.lib.database import Base
+
+# Import all models to register them with Base.metadata
+# This ensures Alembic can autogenerate migrations for all tables
+from src.models.user import User
+from src.models.quiz_response import QuizResponse
+from src.models.meal_plan import MealPlan
+from src.models.payment_transaction import PaymentTransaction
+from src.models.manual_resolution import ManualResolution
+from src.models.magic_link import MagicLinkToken
+from src.models.email_blacklist import EmailBlacklist
+
+# Set target metadata for Alembic autogenerate
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
