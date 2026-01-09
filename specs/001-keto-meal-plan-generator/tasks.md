@@ -101,29 +101,29 @@ pytest backend/tests/security/ -v
 
 ### 1.1 Repository Structure
 
-- [ ] [T001] [P] Create Next.js 14.x frontend app with TypeScript strict mode at `frontend/`
-- [ ] [T002] [P] Create FastAPI backend app with Python 3.11+ at `backend/src/main.py`
-- [ ] [T003] [P] Create database migrations directory at `database/migrations/` with Alembic config
-- [ ] [T004] [P] Create scripts directory for cleanup jobs at `scripts/`
-- [ ] [T005] [P] Add .env.example files for frontend and backend with all required environment variables
+- [x] [T001] [P] Create Next.js 14.x frontend app with TypeScript strict mode at `frontend/`
+- [x] [T002] [P] Create FastAPI backend app with Python 3.11+ at `backend/src/main.py`
+- [x] [T003] [P] Create database migrations directory at `database/migrations/` with Alembic config
+- [x] [T004] [P] Create scripts directory for cleanup jobs at `scripts/`
+- [x] [T005] [P] Add .env.example files for frontend and backend with all required environment variables
 
 **Acceptance**: Directory structure matches plan.md, both apps initialize without errors
 
 ### 1.2 Dependencies Installation
 
-- [ ] [T006] [P] Install Next.js frontend dependencies: next, react, typescript, tailwind, framer-motion, react-hook-form, zod, @paddle/paddle-js, react-icons in `frontend/package.json`
-- [ ] [T007] [P] Install FastAPI backend dependencies: fastapi, uvicorn, sqlalchemy, alembic, pydantic, openai-agents>=0.1.0<1.0, reportlab, httpx, redis in `backend/requirements.txt`
-- [ ] [T008] [P] Configure TypeScript strict mode in `frontend/tsconfig.json` with path aliases
-- [ ] [T009] [P] Configure Tailwind CSS with custom green theme (#22c55e) in `frontend/tailwind.config.js`
+- [x] [T006] [P] Install Next.js frontend dependencies: next, react, typescript, tailwind, framer-motion, react-hook-form, zod, @paddle/paddle-js, react-icons in `frontend/package.json`
+- [x] [T007] [P] Install FastAPI backend dependencies: fastapi, uvicorn, sqlalchemy, alembic, pydantic, openai-agents>=0.1.0<1.0, reportlab, httpx, redis in `backend/requirements.txt`
+- [x] [T008] [P] Configure TypeScript strict mode in `frontend/tsconfig.json` with path aliases
+- [x] [T009] [P] Configure Tailwind CSS with custom green theme (#22c55e) in `frontend/tailwind.config.js`
 
 **Acceptance**: `npm install` and `pip install -r requirements.txt` succeed, no dependency conflicts
 
 ### 1.3 Database & External Services
 
-- [ ] [T010] Create Neon DB connection utility at `backend/src/lib/database.py` with async SQLAlchemy session management
-- [ ] [T011] Create Redis connection utility at `backend/src/lib/redis_client.py` with connection pooling
-- [ ] [T012] [P] Setup Sentry error tracking integration in `backend/src/main.py` and `frontend/src/lib/sentry.ts`
-- [ ] [T013] [P] Create environment variable validation utilities at `backend/src/lib/env.py` and `frontend/src/lib/env.ts`
+- [x] [T010] Create Neon DB connection utility at `backend/src/lib/database.py` with async SQLAlchemy session management
+- [x] [T011] Create Redis connection utility at `backend/src/lib/redis_client.py` with connection pooling
+- [x] [T012] [P] Setup Sentry error tracking integration in `backend/src/main.py` and `frontend/src/lib/sentry.ts`
+- [x] [T013] [P] Create environment variable validation utilities at `backend/src/lib/env.py` and `frontend/src/lib/env.ts`
 
 **Acceptance**: Database connection established, Redis ping succeeds, Sentry test errors logged
 
@@ -133,13 +133,13 @@ pytest backend/tests/security/ -v
 
 ### 2.1 Database Models (SQLAlchemy)
 
-- [ ] [T014] Create User model at `backend/src/models/user.py` with email normalization, password hash, timestamps (data-model.md lines 129-152)
-- [ ] [T015] Create QuizResponse model at `backend/src/models/quiz_response.py` with JSONB quiz_data, calorie_target, retention fields (data-model.md lines 212-234)
-- [ ] [T016] Create MealPlan model at `backend/src/models/meal_plan.py` with JSONB preferences_summary, payment_id unique constraint, refund_count (data-model.md lines 273-294)
-- [ ] [T016A] Create PaymentTransaction model at `backend/src/models/payment_transaction.py` with payment_id unique constraint, meal_plan_id FK, amount/currency/payment_method fields, payment_status enum (data-model.md lines 451-516)
-- [ ] [T017] Create ManualResolution model at `backend/src/models/manual_resolution.py` with SLA tracking, issue_type enum (data-model.md lines 324-346)
-- [ ] [T018] Create MagicLinkToken model at `backend/src/models/magic_link.py` with token_hash, single-use enforcement, IP logging (data-model.md lines 373-390)
-- [ ] [T019] Create EmailBlacklist model at `backend/src/models/email_blacklist.py` with normalized_email unique constraint, 90-day TTL (data-model.md lines 413-426)
+- [x] [T014] Create User model at `backend/src/models/user.py` with email normalization, password hash, timestamps (data-model.md lines 129-152)
+- [x] [T015] Create QuizResponse model at `backend/src/models/quiz_response.py` with JSONB quiz_data, calorie_target, retention fields (data-model.md lines 212-234)
+- [x] [T016] Create MealPlan model at `backend/src/models/meal_plan.py` with JSONB preferences_summary, payment_id unique constraint, refund_count (data-model.md lines 273-294)
+- [x] [T016A] Create PaymentTransaction model at `backend/src/models/payment_transaction.py` with payment_id unique constraint, meal_plan_id FK, amount/currency/payment_method fields, payment_status enum (data-model.md lines 451-516)
+- [x] [T017] Create ManualResolution model at `backend/src/models/manual_resolution.py` with SLA tracking, issue_type enum (data-model.md lines 324-346)
+- [x] [T018] Create MagicLinkToken model at `backend/src/models/magic_link.py` with token_hash, single-use enforcement, IP logging (data-model.md lines 373-390)
+- [x] [T019] Create EmailBlacklist model at `backend/src/models/email_blacklist.py` with normalized_email unique constraint, 90-day TTL (data-model.md lines 413-426)
 
 **Acceptance**: All models import without errors, relationships defined, indexes created
 
