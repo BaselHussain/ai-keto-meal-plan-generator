@@ -1,0 +1,402 @@
+openapi: 3.0.3
+info:
+  title: Keto Meal Plan Generator - Quiz API
+  description: |
+    Public-facing API for 20-step quiz submission and email verification.
+
+    **Functional Requirements Covered**:
+    - FR-Q-001 to FR-Q-020: Quiz flow, validation, hybrid auth
+    - FR-Q-019: Email verification with 6-digit code
+    - FR-C-001 to FR-C-006: Calorie calculation (Mifflin-St Jeor)
+    - FR-P-007: Duplicate payment prevention (lock acquisition)
+
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@ketomealplan.com
+
+servers:
+  - url: https://api.ketomealplan.com/v1
+    description: Production
+  - url: http://localhost:8000/v1
+    description: Local development
+
+tags:
+  - name: Quiz
+    description: 20-step quiz submission and validation
+  - name: Email Verification
+    description: Email ownership verification before payment
+
+paths:
+  /quiz/submit:
+    post:
+      summary: Submit 20-step quiz (unauthenticated or authenticated)
+      description: |
+        Submit completed quiz data. Supports both flows:
+        - **Unauthenticated**: No auth token, quiz saved to DB on submission
+        - **Authenticated**: Bearer token present, incremental saves enabled
+
+        **Functional Requirements**: FR-Q-001 to FR-Q-018
+      tags:
+        - Quiz
+      security:
+        - BearerAuth: []  # Optional
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuizSubmission'
+      responses:
+        '200':
+          description: Quiz submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quiz_id:
+                    type: string
+                    format: uuid
+                    example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  email:
+                    type: string
+                    format: email
+                    example: "user@example.com"
+                  calorie_target:
+                    type: integer
+                    example: 1650
+                  verification_required:
+                    type: boolean
+                    description: True if email verification needed (unauthenticated users)
+                    example: true
+        '400':
+          description: Validation error (invalid quiz data)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate submission detected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /quiz/save-progress:
+    post:
+      summary: Save quiz progress (authenticated users only - FR-Q-011)
+      description: |
+        Incremental save for authenticated users during quiz progression.
+        Enables cross-device resume capability.
+      tags:
+        - Quiz
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quiz_id:
+                  type: string
+                  format: uuid
+                step_data:
+                  type: object
+                  description: Partial quiz data (steps completed so far)
+                current_step:
+                  type: integer
+                  minimum: 1
+                  maximum: 20
+      responses:
+        '200':
+          description: Progress saved
+        '401':
+          description: Unauthorized (no auth token)
+
+  /email/send-verification-code:
+    post:
+      summary: Send 6-digit email verification code (FR-Q-019)
+      description: |
+        Send verification code to user email before enabling payment.
+        Rate limited: 60-second cooldown between requests.
+      tags:
+        - Email Verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+              required:
+                - email
+      responses:
+        '200':
+          description: Verification code sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Verification code sent to user@example.com"
+                  expires_in_seconds:
+                    type: integer
+                    example: 600
+        '429':
+          description: Rate limit exceeded (60-second cooldown)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /email/verify-code:
+    post:
+      summary: Verify 6-digit email code (FR-Q-019)
+      description: |
+        Verify email ownership. Code expires after 10 minutes.
+        Enables "Proceed to Payment" button.
+      tags:
+        - Email Verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+                  example: "123456"
+              required:
+                - email
+                - code
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified:
+                    type: boolean
+                    example: true
+                  verification_token:
+                    type: string
+                    description: Token to pass to Paddle checkout
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          description: Invalid or expired code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /checkout/initiate:
+    post:
+      summary: Initiate Paddle checkout (FR-P-003, FR-P-007)
+      description: |
+        Create Paddle checkout session with verified email.
+        Acquires distributed lock to prevent concurrent payments.
+      tags:
+        - Quiz
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quiz_id:
+                  type: string
+                  format: uuid
+                verification_token:
+                  type: string
+                  description: Token from email verification
+              required:
+                - quiz_id
+                - verification_token
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkout_url:
+                    type: string
+                    format: uri
+                    description: Paddle checkout modal URL
+                    example: "https://checkout.paddle.com/session/abc123"
+        '409':
+          description: Duplicate payment detected or lock acquisition failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+                example:
+                  error: "A payment is already in progress for this email. Please wait 60 seconds."
+
+components:
+  schemas:
+    QuizSubmission:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        step_1:
+          type: string
+          enum: [male, female]
+          description: Gender
+        step_2:
+          type: string
+          enum: [sedentary, lightly_active, moderately_active, very_active, super_active]
+          description: Activity level
+        step_3:
+          type: array
+          items:
+            type: string
+            enum: [beef, lamb, chicken, pork, turkey]
+          description: Meat preferences
+        step_4:
+          type: array
+          items:
+            type: string
+            enum: [tuna, salmon, mackerel, cod, pollock]
+          description: Fish preferences
+        step_5:
+          type: array
+          items:
+            type: string
+          description: Vegetables
+        step_6:
+          type: array
+          items:
+            type: string
+          description: Cruciferous vegetables
+        step_7:
+          type: array
+          items:
+            type: string
+          description: Leafy greens
+        step_8:
+          type: array
+          items:
+            type: string
+          description: Legumes
+        step_9:
+          type: array
+          items:
+            type: string
+          description: Shellfish
+        step_10:
+          type: array
+          items:
+            type: string
+          description: Fruits
+        step_11:
+          type: array
+          items:
+            type: string
+          description: Berries
+        step_12:
+          type: array
+          items:
+            type: string
+          description: Grains
+        step_13:
+          type: array
+          items:
+            type: string
+          description: Other carbs
+        step_14:
+          type: array
+          items:
+            type: string
+          description: Cooking fats
+        step_15:
+          type: array
+          items:
+            type: string
+          description: Beverages
+        step_16:
+          type: array
+          items:
+            type: string
+          description: Dairy products
+        step_17:
+          type: string
+          maxLength: 500
+          description: Dietary restrictions (free text with privacy notice)
+        step_18:
+          type: string
+          enum: ["1_meal", "2_meals", "3_meals", "4_plus_meals"]
+          description: Eating frequency
+        step_19:
+          type: array
+          items:
+            type: string
+            enum: [tired_waking_up, frequent_cravings, prefer_salty, prefer_sweet, struggle_appetite_control]
+          description: Personal traits
+        step_20:
+          type: object
+          properties:
+            age:
+              type: integer
+              minimum: 18
+              maximum: 100
+            weight_kg:
+              type: number
+              minimum: 13.6
+              maximum: 227
+            height_cm:
+              type: number
+              minimum: 122
+              maximum: 229
+            goal:
+              type: string
+              enum: [weight_loss, muscle_gain, maintenance]
+          required:
+            - age
+            - weight_kg
+            - height_cm
+            - goal
+      required:
+        - email
+        - step_1
+        - step_2
+        - step_20
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Invalid quiz data"
+        details:
+          type: object
+          additionalProperties: true
+      required:
+        - error
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Optional JWT token for authenticated users (mid-quiz account creation)

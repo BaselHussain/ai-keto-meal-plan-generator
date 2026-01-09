@@ -208,3 +208,12 @@ Wait for consent; never auto-create ADRs. Group related decisions (stacks, authe
 
 ## Code Standards
 See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.
+
+## Active Technologies
+- TypeScript 5.x + Next.js 14.x (frontend), Python 3.11+ (backend) + Next.js, React Hook Form, Zod, Tailwind, Framer Motion, Paddle.js, FastAPI, Pydantic, SQLAlchemy, OpenAI Agents SDK, ReportLab (001-keto-meal-plan-generator)
+- Neon DB (PostgreSQL), Vercel Blob (5GB free), Redis (locks/rate limits) (001-keto-meal-plan-generator)
+- TypeScript 5.x (Next.js 14.x frontend), Python 3.11+ (FastAPI backend) (001-keto-meal-plan-generator)
+- Neon DB (serverless PostgreSQL), Vercel Blob (PDF storage, 5GB free tier), Redis (distributed locks, rate limiting) (001-keto-meal-plan-generator)
+
+## Recent Changes
+- 001-keto-meal-plan-generator: Added TypeScript 5.x + Next.js 14.x (frontend), Python 3.11+ (backend) + Next.js, React Hook Form, Zod, Tailwind, Framer Motion, Paddle.js, FastAPI, Pydantic, SQLAlchemy, OpenAI Agents SDK, ReportLab
