@@ -15,7 +15,7 @@ dependencies = [
     "alembic>=1.13.1",
 
     # Data Validation
-    "pydantic>=2.6.0",
+    "pydantic[email]>=2.6.0",
     "pydantic-settings>=2.1.0",
 
     # Environment & Config
