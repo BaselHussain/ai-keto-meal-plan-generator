@@ -153,10 +153,10 @@ pytest backend/tests/security/ -v
 
 ### 2.3 Core Utilities
 
-- [ ] [T023] Create email normalization utility at `backend/src/lib/email_utils.py` with Gmail dot/plus removal logic (research.md lines 554-587)
-- [ ] [T024] Create Mifflin-St Jeor calorie calculator at `backend/src/services/calorie_calculator.py` with gender-specific formulas, activity multipliers, calorie floors (research.md lines 809-927)
-- [ ] [T025] Create food preference summary derivation logic at `backend/src/lib/preferences.py` to extract excluded_foods, preferred_proteins from quiz data (research.md lines 981-1032)
-- [ ] [T026] [P] Create Pydantic schemas for API validation at `backend/src/schemas/` (quiz, meal_plan, auth, recovery)
+- [x] [T023] Create email normalization utility at `backend/src/lib/email_utils.py` with Gmail dot/plus removal logic (research.md lines 554-587)
+- [x] [T024] Create Mifflin-St Jeor calorie calculator at `backend/src/services/calorie_calculator.py` with gender-specific formulas, activity multipliers, calorie floors (research.md lines 809-927)
+- [x] [T025] Create food preference summary derivation logic at `backend/src/lib/preferences.py` to extract excluded_foods, preferred_proteins from quiz data (research.md lines 981-1032)
+- [x] [T026] [P] Create Pydantic schemas for API validation at `backend/src/schemas/` (quiz, meal_plan, auth, recovery)
 
 **Acceptance**: Unit tests pass for normalization (10 test cases), calorie calculation (6 scenarios), preference derivation (3 quiz variations)
 
