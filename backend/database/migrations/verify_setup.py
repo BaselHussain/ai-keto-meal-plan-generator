@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Verification script for Alembic migration setup.

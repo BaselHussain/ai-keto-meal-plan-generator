@@ -162,19 +162,19 @@ pytest backend/tests/security/ -v
 
 ### 2.4 Base API Router Setup
 
-- [ ] [T027] Create FastAPI app initialization at `backend/src/main.py` with CORS, middleware, Sentry
-- [ ] [T028] Create API router structure at `backend/src/api/` with health check endpoint
-- [ ] [T029] [P] Create error handling middleware at `backend/src/middleware/error_handler.py` with structured error responses
+- [x] [T027] Create FastAPI app initialization at `backend/src/main.py` with CORS, middleware, Sentry
+- [x] [T028] Create API router structure at `backend/src/api/` with health check endpoint
+- [x] [T029] [P] Create error handling middleware at `backend/src/middleware/error_handler.py` with structured error responses
 
 **Acceptance**: `GET /health` returns 200, error responses follow consistent JSON format
 
 ### 2.5 Unit & Integration Testing (Data Layer)
 
-- [ ] [T029A] Write unit tests for email normalization at `backend/tests/unit/test_email_utils.py`: Gmail dots removal, plus tags, case sensitivity, googlemail→gmail conversion (10 test cases)
-- [ ] [T029B] Write unit tests for Mifflin-St Jeor calculator at `backend/tests/unit/test_calorie_calculator.py`: male/female formulas, all 5 activity levels, 3 goals, calorie floor enforcement (12 test cases)
-- [ ] [T029C] Write unit tests for preference derivation at `backend/tests/unit/test_preferences.py`: excluded_foods extraction, preferred_proteins mapping, dietary_restrictions handling (6 test cases covering 3 quiz variations)
-- [ ] [T029D] Write integration tests for database models at `backend/tests/integration/test_models.py`: CRUD operations, unique constraints (payment_id, normalized_email), foreign keys, JSONB queries on quiz_data and preferences_summary
-- [ ] [T029E] Write migration tests at `backend/tests/integration/test_migrations.py`: alembic upgrade/downgrade, schema verification against data-model.md
+- [x] [T029A] Write unit tests for email normalization at `backend/tests/unit/test_email_utils.py`: Gmail dots removal, plus tags, case sensitivity, googlemail→gmail conversion (10 test cases)
+- [x] [T029B] Write unit tests for Mifflin-St Jeor calculator at `backend/tests/unit/test_calorie_calculator.py`: male/female formulas, all 5 activity levels, 3 goals, calorie floor enforcement (12 test cases)
+- [x] [T029C] Write unit tests for preference derivation at `backend/tests/unit/test_preferences.py`: excluded_foods extraction, preferred_proteins mapping, dietary_restrictions handling (6 test cases covering 3 quiz variations)
+- [x] [T029D] Write integration tests for database models at `backend/tests/integration/test_models.py`: CRUD operations, unique constraints (payment_id, normalized_email), foreign keys, JSONB queries on quiz_data and preferences_summary
+- [x] [T029E] Write migration tests at `backend/tests/integration/test_migrations.py`: alembic upgrade/downgrade, schema verification against data-model.md
 
 **Acceptance**: pytest passes with 80%+ coverage on src/lib/ and src/services/, all 35+ test cases pass, no database constraint violations
 
