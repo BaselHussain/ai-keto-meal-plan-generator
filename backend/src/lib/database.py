@@ -26,6 +26,7 @@ Usage:
 import os
 import logging
 from typing import AsyncGenerator
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -273,7 +274,7 @@ async def health_check() -> dict:
     try:
         async with _async_session_factory() as session:
             # Execute simple query to verify connection
-            result = await session.execute("SELECT 1")
+            result = await session.execute(text("SELECT 1"))
             result.scalar()
 
             # Get pool statistics (if using connection pool)

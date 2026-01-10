@@ -143,6 +143,16 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    try:
+        # Check if event loop is already running (e.g., in pytest-asyncio)
+        loop = asyncio.get_running_loop()
+        # Enable nested event loops for testing compatibility
+        import nest_asyncio
+        nest_asyncio.apply()
+    except RuntimeError:
+        # No event loop running - normal operation
+        pass
+
     asyncio.run(run_async_migrations())
 
 
