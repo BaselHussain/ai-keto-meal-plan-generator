@@ -107,9 +107,9 @@ async def test_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession,
         autoflush=False,
     )
 
-    # Create session and begin transaction
+    # Create session without explicit transaction block
+    # This allows endpoints to manage their own transactions (commit/rollback)
     async with async_session_factory() as session:
-        async with session.begin():
-            yield session
-            # Rollback transaction after test (automatic cleanup)
-            await session.rollback()
+        yield session
+        # Rollback any uncommitted changes after test (automatic cleanup)
+        await session.rollback()
