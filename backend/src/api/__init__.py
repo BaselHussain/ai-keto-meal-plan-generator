@@ -17,16 +17,17 @@ from fastapi import APIRouter
 
 # Import route modules
 from src.api.health import router as health_router
+from src.api.quiz import router as quiz_router
 
 # Create main API router
 api_router = APIRouter()
 
 # Include all route modules
 api_router.include_router(health_router, tags=["Health"])
+api_router.include_router(quiz_router, tags=["Quiz"])
 
 # Add more routers as they are implemented:
 # api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-# api_router.include_router(quiz_router, prefix="/quiz", tags=["Quiz"])
 # api_router.include_router(meal_plan_router, prefix="/meal-plans", tags=["Meal Plans"])
 # api_router.include_router(payment_router, prefix="/payments", tags=["Payments"])
 # api_router.include_router(admin_router, prefix="/admin", tags=["Admin"])

@@ -184,37 +184,37 @@ pytest backend/tests/security/ -v
 
 ### 3.1 Quiz UI Components (Frontend)
 
-- [ ] [T030] [US1] Create QuizContainer component at `frontend/src/components/quiz/QuizContainer.tsx` with step routing, progress display
-- [ ] [T031] [US1] Create StepProgress component at `frontend/src/components/quiz/StepProgress.tsx` showing "Step X of 20"
-- [ ] [T032] [US1] Create GenderSelection component (Step 1) at `frontend/src/components/quiz/steps/Step01Gender.tsx` with radio buttons
-- [ ] [T033] [US1] Create ActivityLevelSelection component (Step 2) at `frontend/src/components/quiz/steps/Step02Activity.tsx` with 5 levels
-- [ ] [T034] [US1] Create FoodSelectionGrid component at `frontend/src/components/quiz/FoodSelectionGrid.tsx` with 64x64px colored SVG icons (React Icons), reusable for Steps 3-16
-- [ ] [T035] [US1] Create BiometricForm component (Step 20) at `frontend/src/components/quiz/steps/Step20Biometrics.tsx` with age, weight, height, goal inputs and privacy badge
-- [ ] [T036] [US1] Create DietaryRestrictionsInput component (Step 17) at `frontend/src/components/quiz/steps/Step17Restrictions.tsx` with 500-char textarea and privacy warning (FR-Q-004)
+- [X] [T030] [US1] Create QuizContainer component at `frontend/src/components/quiz/QuizContainer.tsx` with step routing, progress display
+- [X] [T031] [US1] Create StepProgress component at `frontend/src/components/quiz/StepProgress.tsx` showing "Step X of 20"
+- [X] [T032] [US1] Create GenderSelection component (Step 1) at `frontend/src/components/quiz/steps/Step01Gender.tsx` with radio buttons
+- [X] [T033] [US1] Create ActivityLevelSelection component (Step 2) at `frontend/src/components/quiz/steps/Step02Activity.tsx` with 5 levels
+- [X] [T034] [US1] Create FoodSelectionGrid component at `frontend/src/components/quiz/FoodSelectionGrid.tsx` with 64x64px colored SVG icons (React Icons), reusable for Steps 3-16
+- [X] [T035] [US1] Create BiometricForm component (Step 20) at `frontend/src/components/quiz/steps/Step20Biometrics.tsx` with age, weight, height, goal inputs and privacy badge
+- [X] [T036] [US1] Create DietaryRestrictionsInput component (Step 17) at `frontend/src/components/quiz/steps/Step17Restrictions.tsx` with 500-char textarea and privacy warning (FR-Q-004)
 
 **Acceptance**: All components render, icons display in color, responsive on 360px mobile
 
 ### 3.2 Quiz State Management
 
-- [ ] [T037] [US1] Create quiz state hook at `frontend/src/hooks/useQuizState.ts` with React state + localStorage persistence
-- [ ] [T038] [US1] Implement quiz data validation schemas using Zod at `frontend/src/lib/validators/quiz.ts` for all 20 steps
-- [ ] [T039] [US1] Create quiz submission handler at `frontend/src/services/quizService.ts` with API client calls
+- [X] [T037] [US1] Create quiz state hook at `frontend/src/hooks/useQuizState.ts` with React state + localStorage persistence
+- [X] [T038] [US1] Implement quiz data validation schemas using Zod at `frontend/src/lib/validators/quiz.ts` for all 20 steps
+- [X] [T039] [US1] Create quiz submission handler at `frontend/src/services/quizService.ts` with API client calls
 
 **Acceptance**: State persists on page reload, validation shows inline errors, submission triggers API call
 
 ### 3.3 Quiz Backend API
 
-- [ ] [T040] [US1] Create quiz submission endpoint `POST /api/quiz/submit` at `backend/src/api/quiz.py` that saves to quiz_responses table
-- [ ] [T041] [US1] Implement calorie calculation integration in quiz submission using calorie_calculator service
-- [ ] [T042] [US1] Add total food item validation (10-item minimum, blocking error; 10-14 warning) per FR-Q-017
+- [X] [T040] [US1] Create quiz submission endpoint `POST /api/quiz/submit` at `backend/src/api/quiz.py` that saves to quiz_responses table
+- [X] [T041] [US1] Implement calorie calculation integration in quiz submission using calorie_calculator service
+- [X] [T042] [US1] Add total food item validation (10-item minimum, blocking error; 10-14 warning) per FR-Q-017
 
 **Acceptance**: Quiz submission saves to database, calorie_target calculated correctly, food validation works
 
 ### 3.4 Review Screen
 
-- [ ] [T043] [US1] Create ReviewScreen component at `frontend/src/components/quiz/ReviewScreen.tsx` displaying quiz summary, calorie breakdown, "Proceed to Payment" button
-- [ ] [T044] [US1] Implement calorie breakdown display showing BMR, activity multiplier, goal adjustment, final target
-- [ ] [T045] [US1] Add calorie floor warning display if user hit 1200/1500 minimum threshold
+- [X] [T043] [US1] Create ReviewScreen component at `frontend/src/components/quiz/ReviewScreen.tsx` displaying quiz summary, calorie breakdown, "Proceed to Payment" button
+- [X] [T044] [US1] Implement calorie breakdown display showing BMR, activity multiplier, goal adjustment, final target
+- [X] [T045] [US1] Add calorie floor warning display if user hit 1200/1500 minimum threshold
 
 **Acceptance**: Review screen shows all user data, calorie math visible, payment button enabled only after quiz complete
 

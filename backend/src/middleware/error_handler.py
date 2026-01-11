@@ -229,7 +229,20 @@ async def validation_exception_handler(
 
         # Add additional context for specific error types
         if error.get("ctx"):
-            error_detail["context"] = error["ctx"]
+            # Convert context to JSON-serializable format
+            # Some context values (like ValueError objects) are not serializable
+            ctx = error["ctx"]
+            serializable_ctx = {}
+            for key, value in ctx.items():
+                try:
+                    # Try to convert to JSON-serializable form
+                    import json
+                    json.dumps(value)
+                    serializable_ctx[key] = value
+                except (TypeError, ValueError):
+                    # If not serializable, convert to string
+                    serializable_ctx[key] = str(value)
+            error_detail["context"] = serializable_ctx
 
         errors.append(error_detail)
 
