@@ -7,6 +7,7 @@ export { QuizContainer } from './QuizContainer';
 export { StepProgress } from './StepProgress';
 export { FoodSelectionGrid } from './FoodSelectionGrid';
 export { ReviewScreen } from './ReviewScreen';
+export { PrivacyBadge } from './PrivacyBadge';
 
 // Step components
 export { Step01Gender } from './steps/Step01Gender';

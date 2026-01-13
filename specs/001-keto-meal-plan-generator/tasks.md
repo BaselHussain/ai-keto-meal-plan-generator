@@ -236,12 +236,12 @@ pytest backend/tests/security/ -v
 
 ### 5.1 Privacy UI Components
 
-- [ ] [T049] [US3] Create PrivacyBadge component at `frontend/src/components/quiz/PrivacyBadge.tsx` with lock icon and "100% Private & Confidential" text
-- [ ] [T050] [US3] Add privacy notice to Step 17 (DietaryRestrictions) with warning text per FR-Q-004
-- [ ] [T051] [US3] Add privacy messaging to Step 20 (Biometrics) above input fields with tooltip explaining data deletion policy
-- [ ] [T052] [US3] [P] Create privacy policy page at `frontend/src/pages/privacy.tsx` with GDPR compliance text
+- [X] [T049] [US3] Create PrivacyBadge component at `frontend/src/components/quiz/PrivacyBadge.tsx` with lock icon and "100% Private & Confidential" text
+- [X] [T050] [US3] Add privacy notice to Step 17 (DietaryRestrictions) with warning text per FR-Q-004
+- [X] [T051] [US3] Add privacy messaging to Step 20 (Biometrics) above input fields with tooltip explaining data deletion policy
+- [X] [T052] [US3] [P] Create privacy policy page at `frontend/src/pages/privacy.tsx` with GDPR compliance text
 
-**Acceptance**: Lock icon displays on Steps 17 and 20, tooltip works, privacy policy link opens in new tab
+**Acceptance**: Lock icon displays on Steps 17 and 20, tooltip works, privacy policy link opens in new tab - ✅ COMPLETED
 
 ---
 
