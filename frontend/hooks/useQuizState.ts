@@ -121,7 +121,7 @@ export function useQuizState(): UseQuizStateReturn {
 
   // Initialize React Hook Form with Zod validation
   const form = useForm<QuizData>({
-    resolver: zodResolver(quizSchema),
+    resolver: zodResolver(quizSchema) as any,
     defaultValues: defaultQuizValues,
     mode: 'onChange', // Real-time validation
     shouldUnregister: false, // Preserve unmounted step data (per guide)

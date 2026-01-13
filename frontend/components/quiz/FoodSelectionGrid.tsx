@@ -73,7 +73,7 @@ export function FoodSelectionGrid({
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-8">
         {items.map((item) => {
           const isSelected = selectedItems.includes(item.value);
-          const isDisabled = !isSelected && maxItems && selectedItems.length >= maxItems;
+          const isDisabled = !isSelected && !!maxItems && selectedItems.length >= maxItems;
 
           return (
             <button

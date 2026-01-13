@@ -8,8 +8,7 @@ import { z } from 'zod';
 // Step 1: Gender Selection
 export const step1Schema = z.object({
   step_1: z.enum(['male', 'female'], {
-    required_error: 'Please select your gender to calculate your calorie needs',
-    invalid_type_error: 'Gender must be either male or female',
+    message: 'Please select your gender to calculate your calorie needs',
   }),
 });
 
@@ -18,8 +17,7 @@ export const step2Schema = z.object({
   step_2: z.enum(
     ['sedentary', 'lightly_active', 'moderately_active', 'very_active', 'super_active'],
     {
-      required_error: 'Please select your activity level',
-      invalid_type_error: 'Invalid activity level selected',
+      message: 'Please select your activity level',
     }
   ),
 });
@@ -114,7 +112,7 @@ export const step17Schema = z.object({
 // Step 18: Meals Per Day
 export const step18Schema = z.object({
   step_18: z.enum(['3_meals'], {
-    required_error: 'Please select meals per day',
+    message: 'Please select meals per day',
   }),
 });
 
@@ -129,29 +127,25 @@ export const step20Schema = z.object({
     .object({
       age: z
         .number({
-          required_error: 'Age is required',
-          invalid_type_error: 'Age must be a number',
+          message: 'Age must be a valid number',
         })
         .int('Age must be a whole number')
         .min(18, 'You must be at least 18 years old')
         .max(100, 'Age must be 100 or less'),
       weight_kg: z
         .number({
-          required_error: 'Weight is required',
-          invalid_type_error: 'Weight must be a number',
+          message: 'Weight must be a valid number',
         })
         .min(30, 'Weight must be at least 30 kg (66 lbs)')
         .max(300, 'Weight must be 300 kg (661 lbs) or less'),
       height_cm: z
         .number({
-          required_error: 'Height is required',
-          invalid_type_error: 'Height must be a number',
+          message: 'Height must be a valid number',
         })
         .min(122, 'Height must be at least 122 cm (4\'0")')
         .max(229, 'Height must be 229 cm (7\'6") or less'),
       goal: z.enum(['weight_loss', 'maintenance', 'muscle_gain'], {
-        required_error: 'Please select your fitness goal',
-        invalid_type_error: 'Invalid goal selected',
+        message: 'Please select your fitness goal',
       }),
     })
     .refine(
@@ -304,7 +298,7 @@ export function validateStep(stepNumber: number, data: any): { success: boolean;
     return { success: true };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0]?.message || 'Validation failed' };
+      return { success: false, error: error.issues[0]?.message || 'Validation failed' };
     }
     return { success: false, error: 'Validation failed' };
   }
