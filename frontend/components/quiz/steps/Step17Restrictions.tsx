@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 interface Step17RestrictionsProps {
   value: string;
   onChange: (value: string) => void;
@@ -40,7 +42,15 @@ export function Step17Restrictions({ value, onChange, error }: Step17Restriction
               Privacy Notice
             </p>
             <p className="text-sm text-yellow-900">
-              Enter only food preferences. <strong>DO NOT include medical diagnoses.</strong> This information is retained for 90 days.
+              Enter only food preferences. <strong>DO NOT include medical diagnoses.</strong> This information is retained for 90 days.{' '}
+              <Link
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-yellow-700 font-medium"
+              >
+                Read our Privacy Policy
+              </Link>
             </p>
           </div>
         </div>
