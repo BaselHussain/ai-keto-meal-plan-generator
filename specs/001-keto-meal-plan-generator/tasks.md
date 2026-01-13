@@ -224,9 +224,9 @@ pytest backend/tests/security/ -v
 
 ### 4.1 Back Button Logic
 
-- [ ] [T046] [US2] Implement back navigation in QuizContainer at `frontend/src/components/quiz/QuizContainer.tsx` with state restoration
-- [ ] [T047] [US2] Add Back button UI component with disabled state on Step 1
-- [ ] [T048] [US2] Create state restoration tests to verify data persists when navigating backward
+- [X] [T046] [US2] Implement back navigation in QuizContainer at `frontend/src/components/quiz/QuizContainer.tsx` with state restoration
+- [X] [T047] [US2] Add Back button UI component with disabled state on Step 1
+- [X] [T048] [US2] Create state restoration tests to verify data persists when navigating backward
 
 **Acceptance**: User clicks Back from Step 10, Step 9 data restored, no data loss, Back disabled on Step 1
 

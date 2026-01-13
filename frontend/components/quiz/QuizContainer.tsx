@@ -1,27 +1,22 @@
 'use client';
 
-import { useState, ReactNode } from 'react';
+import { ReactNode } from 'react';
 import { StepProgress } from './StepProgress';
+import { useQuizState } from '../../hooks/useQuizState';
 
 interface QuizContainerProps {
   children?: ReactNode;
 }
 
 export function QuizContainer({ children }: QuizContainerProps) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 20;
-
-  const handleNext = () => {
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
+  const {
+    currentStep,
+    totalSteps,
+    nextStep,
+    previousStep,
+    canGoBack,
+    isLastStep,
+  } = useQuizState();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 py-8 px-4">
@@ -56,10 +51,10 @@ export function QuizContainer({ children }: QuizContainerProps) {
           <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
             <button
               type="button"
-              onClick={handleBack}
-              disabled={currentStep === 1}
+              onClick={previousStep}
+              disabled={!canGoBack}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-                currentStep === 1
+                !canGoBack
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
@@ -74,16 +69,16 @@ export function QuizContainer({ children }: QuizContainerProps) {
 
             <button
               type="button"
-              onClick={handleNext}
-              disabled={currentStep === totalSteps}
+              onClick={nextStep}
+              disabled={isLastStep}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-                currentStep === totalSteps
+                isLastStep
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
               }`}
               aria-label="Go to next step"
             >
-              {currentStep === totalSteps ? 'Review' : 'Next →'}
+              {isLastStep ? 'Review' : 'Next →'}
             </button>
           </div>
         </div>
