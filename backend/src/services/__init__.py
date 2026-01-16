@@ -20,6 +20,12 @@ from .email_verification import (
     clear_verification,
     get_verification_status,
 )
+from .meal_plan_generator import (
+    generate_meal_plan,
+    validate_keto_compliance,
+    validate_structural_integrity,
+    MealPlanGenerationError,
+)
 
 __all__ = [
     "Gender",
@@ -33,4 +39,8 @@ __all__ = [
     "is_email_verified",
     "clear_verification",
     "get_verification_status",
+    "generate_meal_plan",
+    "validate_keto_compliance",
+    "validate_structural_integrity",
+    "MealPlanGenerationError",
 ]
