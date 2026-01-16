@@ -27,9 +27,9 @@ export interface QuizData {
   step_18: string; // Meals per day
   step_19: string[]; // Behavioral patterns
   step_20: {
-    age: number;
-    weight_kg: number;
-    height_cm: number;
+    age: number | '';
+    weight_kg: number | '';
+    height_cm: number | '';
     goal: string; // 'weight_loss' | 'maintenance' | 'muscle_gain'
   };
 }
@@ -56,9 +56,9 @@ const defaultQuizValues: QuizData = {
   step_18: '3_meals',
   step_19: [],
   step_20: {
-    age: 0,
-    weight_kg: 0,
-    height_cm: 0,
+    age: '',
+    weight_kg: '',
+    height_cm: '',
     goal: '',
   },
 };
@@ -85,9 +85,9 @@ const quizSchema = z.object({
   step_18: z.string().default('3_meals'),
   step_19: z.array(z.string()).default([]),
   step_20: z.object({
-    age: z.number().default(0),
-    weight_kg: z.number().default(0),
-    height_cm: z.number().default(0),
+    age: z.union([z.number(), z.literal('')]).default(''),
+    weight_kg: z.union([z.number(), z.literal('')]).default(''),
+    height_cm: z.union([z.number(), z.literal('')]).default(''),
     goal: z.string().default(''),
   }),
 });

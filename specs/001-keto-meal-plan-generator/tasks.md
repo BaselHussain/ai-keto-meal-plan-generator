@@ -249,7 +249,7 @@ pytest backend/tests/security/ -v
 
 ### 6.1 Email Verification (Pre-Payment)
 
-- [ ] [T053] Create email verification code generator at `backend/src/services/email_verification.py` with 6-digit codes, 10-min code expiry, 24-hour verified status validity, Redis storage for both code and verified status (FR-Q-019)
+- [X] [T053] Create email verification code generator at `backend/src/services/email_verification.py` with 6-digit codes, 10-min code expiry, 24-hour verified status validity, Redis storage for both code and verified status (FR-Q-019)
 - [ ] [T054] Create email verification API endpoints at `backend/src/api/verification.py`: `POST /send-code`, `POST /verify-code` with verified status tracking (expires 24h after successful verification)
 - [ ] [T055] [US1] Create EmailVerification component at `frontend/src/components/quiz/EmailVerification.tsx` with code input, resend button (60s cooldown), verified status persistence
 - [ ] [T056] Integrate Resend email service for verification code delivery at `backend/src/services/email_service.py`

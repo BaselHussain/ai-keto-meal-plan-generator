@@ -12,6 +12,14 @@ from .calorie_calculator import (
     Goal,
     calculate_calorie_target,
 )
+from .email_verification import (
+    generate_verification_code,
+    send_verification_code,
+    verify_code,
+    is_email_verified,
+    clear_verification,
+    get_verification_status,
+)
 
 __all__ = [
     "Gender",
@@ -19,4 +27,10 @@ __all__ = [
     "Goal",
     "CalorieCalculation",
     "calculate_calorie_target",
+    "generate_verification_code",
+    "send_verification_code",
+    "verify_code",
+    "is_email_verified",
+    "clear_verification",
+    "get_verification_status",
 ]

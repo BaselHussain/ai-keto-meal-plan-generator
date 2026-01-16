@@ -1,15 +1,15 @@
 'use client';
 
-import { ReactNode } from 'react';
 import { StepProgress } from './StepProgress';
+import { Step01Gender } from './steps/Step01Gender';
+import { Step02Activity } from './steps/Step02Activity';
+import { Step17Restrictions } from './steps/Step17Restrictions';
+import { Step20Biometrics } from './steps/Step20Biometrics';
 import { useQuizState } from '../../hooks/useQuizState';
 
-interface QuizContainerProps {
-  children?: ReactNode;
-}
-
-export function QuizContainer({ children }: QuizContainerProps) {
+export function QuizContainer() {
   const {
+    form,
     currentStep,
     totalSteps,
     nextStep,
@@ -17,6 +17,57 @@ export function QuizContainer({ children }: QuizContainerProps) {
     canGoBack,
     isLastStep,
   } = useQuizState();
+
+  const { setValue, watch } = form;
+
+  // Render the current step component
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <Step01Gender
+            value={watch('step_1')}
+            onChange={(value) => setValue('step_1', value)}
+          />
+        );
+      case 2:
+        return (
+          <Step02Activity
+            value={watch('step_2')}
+            onChange={(value) => setValue('step_2', value)}
+          />
+        );
+      case 17:
+        return (
+          <Step17Restrictions
+            value={watch('step_17')}
+            onChange={(value) => setValue('step_17', value)}
+          />
+        );
+      case 20:
+        return (
+          <Step20Biometrics
+            value={watch('step_20')}
+            onChange={(value) => setValue('step_20', value)}
+          />
+        );
+      default:
+        // Placeholder for steps 3-16, 18-19 (food selection steps not yet implemented)
+        return (
+          <div className="text-center py-12">
+            <div className="text-xl font-semibold text-gray-700 mb-4">
+              Step {currentStep}: Food Selection
+            </div>
+            <p className="text-gray-600 mb-8">
+              This step will be implemented in Phase 6. For now, you can navigate through the quiz structure.
+            </p>
+            <div className="text-sm text-gray-500">
+              Available steps to test: 1, 2, 17, 20
+            </div>
+          </div>
+        );
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 py-8 px-4">
@@ -38,13 +89,9 @@ export function QuizContainer({ children }: QuizContainerProps) {
 
         {/* Quiz Content Card */}
         <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
-          {/* Step Content - Will be replaced with actual step components via state management */}
+          {/* Step Content */}
           <div className="min-h-[400px]">
-            {children || (
-              <div className="text-center text-gray-500">
-                Quiz step {currentStep} will render here
-              </div>
-            )}
+            {renderStep()}
           </div>
 
           {/* Navigation Buttons */}
