@@ -6,8 +6,9 @@ and included here for automatic mounting to the main FastAPI app.
 
 Router Structure:
 - /api/v1/health - Health check endpoint
+- /api/v1/quiz - Quiz submission endpoints
+- /api/v1/verification - Email verification endpoints
 - /api/v1/auth - Authentication endpoints (future)
-- /api/v1/quiz - Quiz submission endpoints (future)
 - /api/v1/meal-plans - Meal plan generation endpoints (future)
 - /api/v1/payments - Payment webhook endpoints (future)
 - /api/v1/admin - Admin endpoints (future)
@@ -18,6 +19,7 @@ from fastapi import APIRouter
 # Import route modules
 from src.api.health import router as health_router
 from src.api.quiz import router as quiz_router
+from src.api.verification import router as verification_router
 
 # Create main API router
 api_router = APIRouter()
@@ -25,6 +27,7 @@ api_router = APIRouter()
 # Include all route modules
 api_router.include_router(health_router, tags=["Health"])
 api_router.include_router(quiz_router, tags=["Quiz"])
+api_router.include_router(verification_router, tags=["Verification"])
 
 # Add more routers as they are implemented:
 # api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])

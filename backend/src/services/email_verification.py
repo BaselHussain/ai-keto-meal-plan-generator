@@ -58,6 +58,7 @@ from src.lib.redis_client import (
     get_ttl,
 )
 from src.lib.email_utils import normalize_email
+from src.services.email_service import send_verification_email
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -186,16 +187,36 @@ async def send_verification_code(email: str) -> Dict[str, Any]:
         await set_with_ttl(cooldown_key, "1", RESEND_COOLDOWN_SECONDS)
 
         logger.info(
-            f"Verification code sent to {normalized_email} "
+            f"Verification code generated for {normalized_email} "
             f"(expires in {CODE_EXPIRY_SECONDS}s)"
         )
 
-        # TODO: In production, integrate with email service (Resend, SendGrid, etc.)
-        # For now, return code for testing/development
+        # Send verification email via Resend
+        email_result = await send_verification_email(
+            to_email=email,  # Use original email (not normalized) for sending
+            verification_code=code
+        )
+
+        if not email_result["success"]:
+            # Email sending failed - log error and return failure
+            logger.error(
+                f"Failed to send verification email to {normalized_email}: "
+                f"{email_result.get('error', 'Unknown error')}"
+            )
+            return {
+                "success": False,
+                "error": "Failed to send verification email. Please try again.",
+            }
+
+        logger.info(
+            f"Verification email sent successfully to {normalized_email} "
+            f"(message_id: {email_result.get('message_id', 'unknown')}, "
+            f"attempts: {email_result.get('attempts', 1)})"
+        )
+
         return {
             "success": True,
-            "code": code,  # Remove in production, use email service instead
-            "message": f"Verification code sent (expires in {CODE_EXPIRY_SECONDS // 60} minutes)",
+            "message": f"Verification code sent to your email (expires in {CODE_EXPIRY_SECONDS // 60} minutes)",
         }
 
     except ValueError as e:
