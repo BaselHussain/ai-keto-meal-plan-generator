@@ -217,3 +217,161 @@ See `.specify/memory/constitution.md` for code quality, testing, performance, se
 
 ## Recent Changes
 - 001-keto-meal-plan-generator: Added TypeScript 5.x + Next.js 14.x (frontend), Python 3.11+ (backend) + Next.js, React Hook Form, Zod, Tailwind, Framer Motion, Paddle.js, FastAPI, Pydantic, SQLAlchemy, OpenAI Agents SDK, ReportLab
+
+---
+
+## Project Requirements (Already Available)
+
+**Do NOT ask the user for requirements.** All project documentation is complete:
+
+| Document | Location | Contents |
+|----------|----------|----------|
+| **Spec** | `specs/001-keto-meal-plan-generator/spec.md` | Full feature specification |
+| **Plan** | `specs/001-keto-meal-plan-generator/plan.md` | Architecture decisions |
+| **Tasks** | `specs/001-keto-meal-plan-generator/tasks.md` | 176 implementation tasks |
+| **Data Model** | `specs/001-keto-meal-plan-generator/data-model.md` | Database schema |
+| **Research** | `specs/001-keto-meal-plan-generator/research.md` | Technical research |
+
+---
+
+## Agents, Skills & Commands (`.claude/` directory)
+
+All specialized agents, skills, and commands are defined in the `.claude/` directory:
+
+```
+.claude/
+├── agents/          # Specialized domain agents
+├── skills/          # Reusable task skills (invoke with /skill-name)
+├── commands/        # SDD workflow commands (sp.* commands)
+└── settings.local.json
+```
+
+### Agents (`.claude/agents/`)
+
+Use these specialized agents via **Task tool** for domain-specific work. Each agent has deep expertise in its area and should be used for the specified task types.
+
+#### AI & Backend Agents
+
+| Agent | Description | When to Use |
+|-------|-------------|-------------|
+| `ai-specialist` | OpenAI Agents SDK expert. Handles agent architectures, dynamic prompts, tool calling, structured outputs with Pydantic, streaming, retry/fallback logic, keto meal plan generation. | T067-T073 (AI Generation), any OpenAI Agents SDK work |
+| `backend-engineer` | FastAPI backend expert. Implements API routes, database models, migrations, async endpoints, service integrations (Paddle, Resend, Vercel Blob, Neon DB), error handling, rate limiting. | T086-T089 (Orchestration), general backend tasks |
+| `database-engineer` | Database architecture expert. Creates SQLAlchemy models, Alembic migrations, FastAPI endpoints, JSONB schemas, Redis setup, query optimization, data layer tests. | T014-T022 (Database Models & Migrations) |
+| `payment-webhook-engineer` | Paddle integration expert. Handles checkout sessions, webhook handlers, signature validation, idempotency, distributed locks, refunds/chargebacks, payment security. | T057-T066 (Paddle Integration & Webhooks) |
+
+#### Email & Authentication Agents
+
+| Agent | Description | When to Use |
+|-------|-------------|-------------|
+| `email-auth-engineer` | Email authentication expert. Implements email normalization, blacklist management, magic link tokens, JWT auth, Resend integration, email templates, session management. | T053-T056 (Email Verification), T081-T085 (Email Delivery), T090-T097 (Magic Links) |
+
+#### Frontend Agents
+
+| Agent | Description | When to Use |
+|-------|-------------|-------------|
+| `frontend-engineer` | Next.js/React expert. Builds pages, components, forms (React Hook Form + Zod), responsive layouts (Tailwind), animations (Framer Motion), API integration. | General frontend components |
+| `frontend-quiz-engineer` | Quiz UI expert. Implements multi-step quiz, form validation, step navigation, quiz animations, form state management, quiz UX. | T030-T048 (Quiz UI & State) |
+| `frontend-payment-engineer` | Payment UI expert. Handles Paddle.js integration, payment forms, email verification UI, checkout flows, payment success/error states. | T057-T061 (Paddle frontend) |
+| `frontend-recovery-engineer` | Recovery UI expert. Builds password recovery, magic link flows, PDF download management, secure file access, account creation via email links. | T092, T097, T102-T104 (Recovery Pages) |
+
+#### Design & Security Agents
+
+| Agent | Description | When to Use |
+|-------|-------------|-------------|
+| `pdf-designer` | ReportLab expert. Creates professional PDF layouts, 30-day meal plans, shopping lists, macro tables, branded documents. Uses Context7 for latest ReportLab docs. | T074-T077 (PDF Generation) |
+| `data-retention-engineer` | Data lifecycle expert. Implements cleanup jobs, SLA monitoring, manual resolution queues, compliance logging, Render cron jobs, GDPR compliance. | T128-T134 (Cleanup Jobs) |
+| `security-auditor` | Security audit expert. Reviews payment flows, authentication systems, API endpoints for vulnerabilities. Checks rate limiting, idempotency, injection prevention. | T146, T127A-F (Security Testing) |
+
+**Example usage:**
+```
+# To implement AI meal plan generation (T067-T073):
+Use Task tool with subagent_type="general-purpose" and prompt:
+"Use the ai-specialist agent patterns to implement T067-T073: AI meal plan generation with OpenAI Agents SDK, keto validation, retry logic."
+
+# To implement email delivery (T081-T085):
+Use Task tool with prompt: "Implement email delivery with Resend (T081-T085)"
+The email-auth-engineer patterns will guide Resend integration, templates, retry logic.
+```
+
+### Skills (`.claude/skills/`)
+
+Invoke skills with `/skill-name`. Full documentation: `.claude/skills/README.md`
+
+Skills are reusable automation scripts that handle common tasks. Each skill can hand off to a specialized agent if issues are found.
+
+#### Testing & Validation Skills
+
+| Skill | Description | When to Use | Hands Off To |
+|-------|-------------|-------------|--------------|
+| `/test` | Run comprehensive test suite (unit, integration, E2E) with coverage reporting | After code changes, before commits | `backend-engineer` |
+| `/test unit` | Run only unit tests | Quick validation during development | `backend-engineer` |
+| `/test integration` | Run integration tests | After implementing service integrations | `backend-engineer` |
+| `/test e2e` | Run end-to-end tests | Before deployment | `backend-engineer` |
+| `/test-coordinator` | Orchestrate multi-phase test suites across agents and testing gates | T089H, T144-T150 (production readiness) | `backend-engineer` |
+| `/test-email` | Send test email via Resend to verify template and delivery | Phase 6.7 - verify email templates work | — |
+| `/test-webhook` | Simulate Paddle webhook events to test payment pipeline | Phase 6.3 - test payment processing | `backend-engineer` |
+| `/test-imports` | Test Python module imports to verify correct installation and structure | After adding new modules, debugging import errors | `backend-engineer` |
+| `/validate-ai` | Test AI meal plan generation with keto compliance (<30g carbs) and structural validation (30 days, 3 meals) | Phase 6.4 - verify AI output quality | `ai-specialist` |
+| `/validate-pdf` | Generate and validate PDF structure (30 days + 4 shopping lists + macros), check file size 400-600KB | Phase 6.5 - verify PDF generation | `pdf-designer` |
+| `/load-test` | Performance and load testing for API endpoints, payment pipeline, concurrent users | Phase 10.4 - production readiness | `backend-engineer` |
+
+#### Infrastructure Skills
+
+| Skill | Description | When to Use | Hands Off To |
+|-------|-------------|-------------|--------------|
+| `/migrate` | Database migration management with Alembic (create, apply, rollback) | Phase 2.2, any schema changes | `backend-engineer` |
+| `/migrate up` | Apply pending migrations | After pulling new code | `backend-engineer` |
+| `/migrate down` | Rollback last migration | When migration fails | `backend-engineer` |
+| `/migrate create "name"` | Create new migration | Adding new tables/columns | `backend-engineer` |
+| `/migrate status` | Show migration status | Check current state | `backend-engineer` |
+| `/setup-env` | Validate all environment variables and API connections (DB, Redis, OpenAI, Vercel Blob, Resend) | Project setup, debugging connection issues | `backend-engineer` |
+| `/deploy` | Deploy frontend (Vercel) and backend (Render) with migration and health verification | Phase 10.3 - production deployment | `backend-engineer` |
+| `/deploy staging` | Deploy to staging environment | Pre-production testing | `backend-engineer` |
+| `/deploy production` | Deploy to production | Final release | `backend-engineer` |
+| `/monitor` | System health monitoring - check DB, Redis, Sentry, Vercel Blob status, SLA breaches | Pre-deployment, debugging, daily checks | — |
+| `/monitor detailed` | Comprehensive health report with metrics | Weekly maintenance | — |
+| `/seed-data` | Seed test database with users, quiz responses, meal plans | Development, testing | — |
+
+#### Maintenance & Security Skills
+
+| Skill | Description | When to Use | Hands Off To |
+|-------|-------------|-------------|--------------|
+| `/cleanup` | Run data retention cleanup jobs (quiz responses, PDFs, magic links, blacklist) | T128-T134, weekly maintenance | — |
+| `/cleanup dry-run` | Preview what would be deleted | Before actual cleanup | — |
+| `/cleanup force` | Execute actual deletions | Weekly scheduled cleanup | — |
+| `/check-sla` | Check manual resolution queue for SLA breaches, trigger auto-refunds | Phase 9.4 - SLA monitoring | `backend-engineer` |
+| `/check-blacklist` | Check email blacklist status and manage blacklisted emails | Phase 9.2 - chargeback handling | — |
+| `/audit-security` | Run security audit (rate limiting, webhook validation, SQL injection, XSS) | T146, before production, after auth changes | `security-auditor` |
+
+### Commands (`.claude/commands/`)
+
+SDD workflow commands:
+
+| Command | Use For |
+|---------|---------|
+| `/sp.implement` | Execute tasks from tasks.md |
+| `/sp.plan` | Generate implementation plan |
+| `/sp.tasks` | Generate tasks.md from plan |
+| `/sp.clarify` | Ask clarification questions |
+| `/sp.analyze` | Cross-artifact consistency check |
+| `/sp.adr` | Create Architecture Decision Record |
+| `/sp.phr` | Create Prompt History Record |
+| `/sp.git.commit_pr` | Commit and create PR |
+
+---
+
+## Phase-to-Agent Mapping
+
+| Phase | Tasks | Primary Agent | Skills |
+|-------|-------|---------------|--------|
+| 6.1 Email Verification | T053-T056 | `email-auth-engineer` | `/test-email` |
+| 6.2 Paddle Integration | T057-T061 | `payment-webhook-engineer` | `/test-webhook` |
+| 6.3 Webhook Handler | T062-T066 | `payment-webhook-engineer` | `/test-webhook` |
+| 6.4 AI Generation | T067-T073 | `ai-specialist` | `/validate-ai` |
+| 6.5 PDF Generation | T074-T077 | `pdf-designer` | `/validate-pdf` |
+| 6.6 Blob Storage | T078-T080 | `backend-engineer` | `/monitor` |
+| 6.7 Email Delivery | T081-T085 | `email-auth-engineer` | `/test-email` |
+| 6.8 Orchestration | T086-T089 | `backend-engineer` | `/test` |
+| 7.x Recovery | T090-T107 | `email-auth-engineer`, `frontend-recovery-engineer` | `/test` |
+| 9.x Security | T112-T127 | `security-auditor` | `/audit-security` |
+| 10.x Deploy | T139-T150 | `backend-engineer` | `/deploy`, `/load-test` |
