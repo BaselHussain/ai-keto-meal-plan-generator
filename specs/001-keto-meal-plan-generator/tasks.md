@@ -281,13 +281,13 @@ pytest backend/tests/security/ -v
 
 ### 6.4 AI Meal Plan Generation
 
-- [ ] [T067] Setup OpenAI Agents SDK client configuration at `backend/src/lib/ai_client.py` with environment-based model selection (Gemini dev, OpenAI prod) per research.md lines 67-80
-- [ ] [T068] Create Pydantic models for AI structured output at `backend/src/schemas/ai_output.py`: Meal, DayMealPlan, MealPlanOutput
-- [ ] [T069] Create AI agent meal plan generator at `backend/src/services/meal_plan_generator.py` with Agent, Runner.run(), 30-day prompt (research.md lines 94-153)
-- [ ] [T070] Implement keto compliance validation: check each day <30g carbs, retry up to 2 times on failure per FR-A-007
-- [ ] [T071] Implement structural integrity validation: verify 30 days, 3 meals per day, all fields populated, retry up to 1 time per FR-A-015
-- [ ] [T072] Implement AI retry logic with exponential backoff (2s, 4s, 8s) and Gemini fallback on auth/quota errors per FR-A-011
-- [ ] [T073] Add 20-second timeout to AI generation call using asyncio.wait_for()
+- [x] [T067] Setup OpenAI Agents SDK client configuration at `backend/src/lib/ai_client.py` with environment-based model selection (Gemini dev, OpenAI prod) per research.md lines 67-80
+- [x] [T068] Create Pydantic models for AI structured output at `backend/src/schemas/ai_output.py`: Meal, DayMealPlan, MealPlanOutput (already existed at `backend/src/schemas/meal_plan.py`)
+- [x] [T069] Create AI agent meal plan generator at `backend/src/services/meal_plan_generator.py` with Agent, Runner.run(), 30-day prompt (research.md lines 94-153)
+- [x] [T070] Implement keto compliance validation: check each day <30g carbs, retry up to 2 times on failure per FR-A-007
+- [x] [T071] Implement structural integrity validation: verify 30 days, 3 meals per day, all fields populated, retry up to 1 time per FR-A-015
+- [x] [T072] Implement AI retry logic with exponential backoff (2s, 4s, 8s) and Gemini fallback on auth/quota errors per FR-A-011
+- [x] [T073] Add 60-second timeout to AI generation call using asyncio.wait_for() (increased from 20s, will be tuned in T089D)
 
 **Acceptance**: AI generates 30-day plan <20s, keto compliance validated, structural validation passes, retries work, manual queue triggered on failure
 
