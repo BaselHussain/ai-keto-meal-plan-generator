@@ -293,18 +293,18 @@ pytest backend/tests/security/ -v
 
 ### 6.5 PDF Generation (ReportLab)
 
-- [ ] [T074] Create PDF generator service at `backend/src/services/pdf_generator.py` using ReportLab with cover page, 30-day meals table, 4 weekly shopping lists (research.md lines 651-787)
-- [ ] [T075] Implement custom PDF styles with green theme (#22c55e), table layouts, macronutrient breakdown per meal
-- [ ] [T076] Add 20-second timeout to PDF generation with error handling
-- [ ] [T077] Create PDF validation to ensure file generated successfully (non-zero bytes, valid PDF header)
+- [x] [T074] Create PDF generator service at `backend/src/services/pdf_generator.py` using ReportLab with cover page, 30-day meals table, 4 weekly shopping lists (research.md lines 651-787)
+- [x] [T075] Implement custom PDF styles with green theme (#22c55e), table layouts, macronutrient breakdown per meal
+- [x] [T076] Add 20-second timeout to PDF generation with error handling
+- [x] [T077] Create PDF validation to ensure file generated successfully (non-zero bytes, valid PDF header)
 
 **Acceptance**: PDF generated <20s, includes cover + 30 days + shopping lists, green theme applied, file size 400-600KB
 
 ### 6.6 Vercel Blob Storage
 
-- [ ] [T078] Create Vercel Blob upload service at `backend/src/services/blob_storage.py` with on-demand signed URL generation function (generates fresh 1-hour signed URL when called, not pre-generated) (FR-D-005, FR-D-006, FR-R-003)
-- [ ] [T079] Implement PDF upload to Vercel Blob with random suffix for filename collision prevention
-- [ ] [T080] Store permanent blob path (not time-limited signed URL) in meal_plans.pdf_blob_path field with status update to "completed"
+- [x] [T078] Create Vercel Blob upload service at `backend/src/services/blob_storage.py` with on-demand signed URL generation function (generates fresh 1-hour signed URL when called, not pre-generated) (FR-D-005, FR-D-006, FR-R-003)
+- [x] [T079] Implement PDF upload to Vercel Blob with random suffix for filename collision prevention
+- [x] [T080] Store permanent blob path (not time-limited signed URL) in meal_plans.pdf_blob_path field with status update to "completed"
 
 **Acceptance**: PDF uploaded to Vercel Blob, permanent blob path stored in database (not signed URL), on-demand function can generate fresh signed URLs with 1-hour expiry throughout 90-day retention period
 
