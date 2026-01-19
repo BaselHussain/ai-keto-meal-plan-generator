@@ -1,0 +1,54 @@
+KETO MEAL PLAN - Your Custom Keto Plan is Ready!
+================================================
+
+Congratulations, Your Plan is Ready!
+
+Great news! Your personalized keto meal plan has been created and is ready for download. This comprehensive 30-day plan is tailored specifically for you.
+
+YOUR PERSONALIZED PLAN
+----------------------
+Daily Target: {calorie_target} calories/day
+Optimized for your goals with strict keto macros
+
+
+GET YOUR PLAN
+-------------
+Download your PDF here:
+{pdf_download_url}
+
+
+YOUR PLAN INCLUDES
+------------------
+* 30 days of complete keto meal plans (breakfast, lunch, dinner)
+* 4 weekly shopping lists with exact quantities
+* Daily macro breakdown (protein, fat, net carbs)
+* Meals under 30g net carbs per day guaranteed
+* Easy-to-follow recipes with prep instructions
+
+
+LOST THIS EMAIL?
+----------------
+You can re-download your plan anytime for 90 days:
+
+Request Magic Link:
+{magic_link_url}
+
+Or create an account for permanent access:
+{create_account_url}
+
+
+WANT PERMANENT ACCESS?
+----------------------
+Create a free account to access your dashboard anytime,
+track progress, and get future updates:
+{create_account_url}
+
+
+---
+This email was sent to: {user_email}
+
+Need help? Contact us at support@ketomealplan.com
+
+(c) 2026 Keto Meal Plan. All rights reserved.
+
+You received this email because you purchased a personalized keto meal plan.
