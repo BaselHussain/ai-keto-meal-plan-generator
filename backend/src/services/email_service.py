@@ -1,13 +1,17 @@
 """
-Email service for sending verification codes via Resend API.
+Email service for sending transactional emails via Resend API.
 
 This service provides email delivery functionality with professional HTML templates,
 retry logic, and comprehensive error handling.
 
 Features:
+- Verification code emails with 6-digit codes
+- Meal plan delivery emails with PDF attachment (T082)
 - HTML email templates with green theme (#22c55e)
 - Plain text fallback for non-HTML clients
-- Retry logic with exponential backoff (3 attempts: 2s, 4s, 8s)
+- Retry logic with exponential backoff (3 attempts: 2s, 4s, 8s) (T083)
+- Idempotency checks to prevent duplicate sends (T085)
+- Manual resolution queue routing on failure (T083)
 - Comprehensive error handling and logging
 - Environment-based configuration (RESEND_API_KEY, RESEND_FROM_EMAIL)
 
@@ -16,11 +20,20 @@ Dependencies:
 - Environment variables: RESEND_API_KEY, RESEND_FROM_EMAIL
 
 Usage:
-    from src.services.email_service import send_verification_email
+    from src.services.email_service import send_verification_email, send_delivery_email
 
+    # Verification email
     result = await send_verification_email(
         to_email="user@example.com",
         verification_code="123456"
+    )
+
+    # Delivery email with PDF
+    result = await send_delivery_email(
+        to_email="user@example.com",
+        calorie_target=1800,
+        pdf_bytes=pdf_content,
+        pdf_filename="keto-meal-plan.pdf"
     )
 
     if result["success"]:
@@ -29,10 +42,13 @@ Usage:
         print(f"Failed to send email: {result['error']}")
 """
 
+import base64
 import os
 import asyncio
 import logging
-from typing import Dict, Any
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any, Optional
 
 import resend
 
@@ -435,3 +451,366 @@ def _is_retryable_error(error_message: str) -> bool:
 
     # Default: retry on unknown errors (safer approach)
     return True
+
+
+# Base URL for links (from environment variable)
+APP_URL = os.getenv("APP_URL", "http://localhost:3000")
+
+# Template directory
+TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+
+
+def _load_delivery_template(template_name: str) -> str:
+    """
+    Load a delivery email template from the templates directory.
+
+    Args:
+        template_name: Template filename (e.g., "delivery_email.html")
+
+    Returns:
+        str: Template content
+
+    Raises:
+        FileNotFoundError: If template file doesn't exist
+    """
+    template_path = TEMPLATES_DIR / template_name
+    if not template_path.exists():
+        raise FileNotFoundError(f"Email template not found: {template_path}")
+    return template_path.read_text(encoding="utf-8")
+
+
+def _render_delivery_template(
+    template_content: str,
+    calorie_target: int,
+    pdf_download_url: str,
+    magic_link_url: str,
+    create_account_url: str,
+    user_email: str,
+) -> str:
+    """
+    Render delivery email template with placeholder substitution.
+
+    Args:
+        template_content: Raw template string with placeholders
+        calorie_target: Daily calorie target to display
+        pdf_download_url: URL for PDF download (on-demand signed URL endpoint)
+        magic_link_url: URL to request magic link for recovery
+        create_account_url: URL to create account for permanent access
+        user_email: User's email address to display in footer
+
+    Returns:
+        str: Rendered template with all placeholders replaced
+    """
+    return (
+        template_content
+        .replace("{calorie_target}", str(calorie_target))
+        .replace("{pdf_download_url}", pdf_download_url)
+        .replace("{magic_link_url}", magic_link_url)
+        .replace("{create_account_url}", create_account_url)
+        .replace("{user_email}", user_email)
+    )
+
+
+def _build_delivery_urls(payment_id: str, user_email: str) -> Dict[str, str]:
+    """
+    Build all URLs needed for the delivery email.
+
+    Per FR-E-002:
+    - PDF download link points to /api/download-pdf endpoint which generates
+      fresh signed URL on-demand (not a pre-signed URL)
+    - Magic link points to /recover-plan page
+    - Account creation link pre-fills the email
+
+    Args:
+        payment_id: Paddle payment ID for download URL
+        user_email: User's email for account creation URL
+
+    Returns:
+        Dict with pdf_download_url, magic_link_url, create_account_url
+    """
+    from urllib.parse import quote
+
+    encoded_email = quote(user_email, safe="")
+
+    return {
+        "pdf_download_url": f"{APP_URL}/api/download-pdf?payment_id={payment_id}",
+        "magic_link_url": f"{APP_URL}/recover-plan",
+        "create_account_url": f"{APP_URL}/create-account?email={encoded_email}",
+    }
+
+
+async def send_delivery_email(
+    to_email: str,
+    calorie_target: int,
+    pdf_bytes: bytes,
+    pdf_filename: str,
+    payment_id: str,
+    email_already_sent: bool = False,
+) -> Dict[str, Any]:
+    """
+    Send meal plan delivery email via Resend API with PDF attachment.
+
+    This function sends a professional HTML email with the generated PDF meal plan
+    attached, including download link, recovery instructions, and optional account
+    creation link. It implements:
+    - T082: Email sending with Resend, PDF attachment, template rendering
+    - T083: Retry logic (3 attempts, exponential backoff: 2s, 4s, 8s)
+    - T084: Returns sent_at timestamp for caller to update database
+    - T085: Idempotency check to prevent duplicate sends on webhook retries
+
+    Args:
+        to_email: Recipient email address
+        calorie_target: Daily calorie target to display in email
+        pdf_bytes: Generated PDF content as bytes
+        pdf_filename: Filename for PDF attachment (e.g., "keto-meal-plan-30-days.pdf")
+        payment_id: Paddle payment ID for building download URL
+        email_already_sent: If True, return early with success (idempotency check, T085)
+
+    Returns:
+        Dict with keys:
+        - success (bool): True if email was sent successfully
+        - message_id (str): Resend message ID (if successful)
+        - sent_at (datetime): Timestamp when email was sent (for T084, caller updates DB)
+        - error (str): Error message (if failed)
+        - attempts (int): Number of attempts made
+        - requires_manual_resolution (bool): True if failed after all retries (T083)
+        - manual_resolution_info (dict): Info for creating manual_resolution entry (T083)
+
+    Examples:
+        >>> result = await send_delivery_email(
+        ...     to_email="user@example.com",
+        ...     calorie_target=1800,
+        ...     pdf_bytes=pdf_content,
+        ...     pdf_filename="keto-meal-plan.pdf",
+        ...     payment_id="txn_01234567890"
+        ... )
+        >>> if result["success"]:
+        ...     # Update database with sent_at timestamp
+        ...     meal_plan.email_sent_at = result["sent_at"]
+        ... elif result.get("requires_manual_resolution"):
+        ...     # Create manual resolution queue entry
+        ...     create_manual_resolution(result["manual_resolution_info"])
+
+    Idempotency (T085):
+        If email_already_sent=True (checked by caller from meal_plan.email_sent_at),
+        function returns early with success to prevent duplicate sends on webhook retries.
+
+    Retry Logic (T083):
+        - Attempts: 3 (initial + 2 retries)
+        - Delays: 2s, 4s, 8s (exponential backoff)
+        - Retries on: Network errors, rate limits, temporary API failures
+        - No retry on: Invalid API key, invalid email format
+        - On all retries failed: Returns info for manual_resolution queue entry
+
+    Template Placeholders:
+        - {calorie_target}: Daily calorie target
+        - {pdf_download_url}: On-demand signed URL endpoint
+        - {magic_link_url}: Recovery page URL
+        - {create_account_url}: Account creation URL with pre-filled email
+        - {user_email}: User's email address
+
+    FR-E-001 to FR-E-005 Compliance:
+        - FR-E-001: Sends transactional email with PDF attached
+        - FR-E-002: Includes download link, recovery instructions, account creation link
+        - FR-E-003: Uses professional branded templates (green #22c55e)
+        - FR-E-004: Idempotent via email_already_sent parameter
+        - FR-E-005: Retries with exponential backoff, routes to manual_resolution on failure
+    """
+    # T085: Idempotency check - prevent duplicate sends on webhook retries
+    if email_already_sent:
+        logger.info(
+            f"Email already sent for payment, skipping duplicate send "
+            f"(to_email={to_email}, payment_id={payment_id})"
+        )
+        return {
+            "success": True,
+            "message_id": "already_sent",
+            "sent_at": None,  # No new send, so no timestamp
+            "error": None,
+            "attempts": 0,
+            "requires_manual_resolution": False,
+        }
+
+    # Validate environment configuration
+    if not RESEND_API_KEY:
+        logger.error("RESEND_API_KEY environment variable not set")
+        return {
+            "success": False,
+            "message_id": None,
+            "sent_at": None,
+            "error": "Email service not configured. Please contact support.",
+            "attempts": 0,
+            "requires_manual_resolution": True,
+            "manual_resolution_info": {
+                "payment_id": payment_id,
+                "user_email": to_email,
+                "issue_type": "email_delivery_failed",
+                "error_details": "RESEND_API_KEY not configured",
+            },
+        }
+
+    # Configure Resend API
+    resend.api_key = RESEND_API_KEY
+
+    # Build URLs for email links
+    urls = _build_delivery_urls(payment_id, to_email)
+
+    # Load and render email templates
+    try:
+        html_template = _load_delivery_template("delivery_email.html")
+        text_template = _load_delivery_template("delivery_email.txt")
+
+        html_content = _render_delivery_template(
+            html_template,
+            calorie_target=calorie_target,
+            pdf_download_url=urls["pdf_download_url"],
+            magic_link_url=urls["magic_link_url"],
+            create_account_url=urls["create_account_url"],
+            user_email=to_email,
+        )
+
+        text_content = _render_delivery_template(
+            text_template,
+            calorie_target=calorie_target,
+            pdf_download_url=urls["pdf_download_url"],
+            magic_link_url=urls["magic_link_url"],
+            create_account_url=urls["create_account_url"],
+            user_email=to_email,
+        )
+    except FileNotFoundError as e:
+        logger.error(f"Email template not found: {e}")
+        return {
+            "success": False,
+            "message_id": None,
+            "sent_at": None,
+            "error": f"Email template error: {e}",
+            "attempts": 0,
+            "requires_manual_resolution": True,
+            "manual_resolution_info": {
+                "payment_id": payment_id,
+                "user_email": to_email,
+                "issue_type": "email_delivery_failed",
+                "error_details": f"Template not found: {e}",
+            },
+        }
+
+    # Encode PDF as base64 for attachment
+    pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
+    # T083: Retry loop with exponential backoff (2s, 4s, 8s)
+    last_error = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            logger.info(
+                f"Sending delivery email to {to_email} "
+                f"(attempt {attempt}/{MAX_RETRIES}, payment_id={payment_id})"
+            )
+
+            # Send email via Resend API with PDF attachment
+            response = resend.Emails.send({
+                "from": RESEND_FROM_EMAIL,
+                "to": to_email,
+                "subject": "Your Custom Keto Plan - Ready to Transform!",
+                "html": html_content,
+                "text": text_content,
+                "attachments": [
+                    {
+                        "filename": pdf_filename,
+                        "content": pdf_base64,
+                    }
+                ],
+            })
+
+            # T084: Capture sent_at timestamp for caller to update database
+            sent_at = datetime.utcnow()
+
+            # Success - extract message ID
+            message_id = response.get("id", "unknown")
+            logger.info(
+                f"Delivery email sent successfully to {to_email} "
+                f"(message_id={message_id}, attempt={attempt}, payment_id={payment_id})"
+            )
+
+            return {
+                "success": True,
+                "message_id": message_id,
+                "sent_at": sent_at,  # T084: Caller uses this to update meal_plan.email_sent_at
+                "error": None,
+                "attempts": attempt,
+                "requires_manual_resolution": False,
+            }
+
+        except resend.exceptions.ResendError as e:
+            # Resend-specific errors
+            error_message = str(e)
+            last_error = error_message
+
+            # Check if error is retryable
+            is_retryable = _is_retryable_error(error_message)
+
+            logger.warning(
+                f"Resend API error on attempt {attempt}/{MAX_RETRIES} "
+                f"for {to_email}: {error_message} "
+                f"(retryable={is_retryable}, payment_id={payment_id})"
+            )
+
+            # Don't retry on non-retryable errors (invalid API key, bad email format)
+            if not is_retryable:
+                return {
+                    "success": False,
+                    "message_id": None,
+                    "sent_at": None,
+                    "error": f"Email delivery failed: {error_message}",
+                    "attempts": attempt,
+                    "requires_manual_resolution": True,
+                    "manual_resolution_info": {
+                        "payment_id": payment_id,
+                        "user_email": to_email,
+                        "issue_type": "email_delivery_failed",
+                        "error_details": error_message,
+                    },
+                }
+
+            # T083: Retry with exponential backoff
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1]
+                logger.info(f"Retrying email send in {delay} seconds...")
+                await asyncio.sleep(delay)
+
+        except Exception as e:
+            # Unexpected errors (network issues, etc.)
+            error_message = f"{type(e).__name__}: {str(e)}"
+            last_error = error_message
+
+            logger.warning(
+                f"Unexpected error on attempt {attempt}/{MAX_RETRIES} "
+                f"for {to_email}: {error_message} (payment_id={payment_id})"
+            )
+
+            # T083: Retry on unexpected errors
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1]
+                logger.info(f"Retrying email send in {delay} seconds...")
+                await asyncio.sleep(delay)
+
+    # T083: All retries exhausted - return info for manual_resolution queue entry
+    logger.error(
+        f"Failed to send delivery email to {to_email} after {MAX_RETRIES} attempts. "
+        f"Last error: {last_error} (payment_id={payment_id})"
+    )
+
+    return {
+        "success": False,
+        "message_id": None,
+        "sent_at": None,
+        "error": f"Email delivery failed after {MAX_RETRIES} attempts. Please try again later.",
+        "attempts": MAX_RETRIES,
+        "requires_manual_resolution": True,
+        "manual_resolution_info": {
+            "payment_id": payment_id,
+            "user_email": to_email,
+            "issue_type": "email_delivery_failed",
+            "error_details": last_error,
+        },
+    }

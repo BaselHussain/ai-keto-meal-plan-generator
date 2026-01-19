@@ -310,11 +310,11 @@ pytest backend/tests/security/ -v
 
 ### 6.7 Email Delivery (Resend)
 
-- [ ] [T081] Create delivery email template at `backend/src/templates/delivery_email.html` with green theme, PDF attachment, recovery instructions (FR-E-003)
-- [ ] [T082] Implement email sending with Resend at `backend/src/services/email_service.py` with PDF attachment + download link to /api/download-pdf endpoint (generates fresh signed URL on-demand per FR-E-002)
-- [ ] [T083] Add email retry logic (3 attempts, exponential backoff 2s, 4s, 8s) and failure routing to manual_resolution queue
-- [ ] [T084] Update meal_plans.email_sent_at timestamp on successful delivery
-- [ ] [T085] Implement email idempotency check to prevent duplicate sends on webhook retries
+- [x] [T081] Create delivery email template at `backend/src/templates/delivery_email.html` with green theme, PDF attachment, recovery instructions (FR-E-003)
+- [x] [T082] Implement email sending with Resend at `backend/src/services/email_service.py` with PDF attachment + download link to /api/download-pdf endpoint (generates fresh signed URL on-demand per FR-E-002)
+- [x] [T083] Add email retry logic (3 attempts, exponential backoff 2s, 4s, 8s) and failure routing to manual_resolution queue
+- [x] [T084] Update meal_plans.email_sent_at timestamp on successful delivery
+- [x] [T085] Implement email idempotency check to prevent duplicate sends on webhook retries
 
 **Acceptance**: Email delivered with PDF attachment <90s total from payment, retries on failure, manual queue triggered if all attempts fail
 
