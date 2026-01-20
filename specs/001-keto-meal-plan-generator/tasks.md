@@ -320,10 +320,10 @@ pytest backend/tests/security/ -v
 
 ### 6.8 Orchestration (Background Task)
 
-- [ ] [T086] Create meal plan delivery orchestration at `backend/src/services/delivery_orchestrator.py` coordinating AI → PDF → Blob → Email flow
-- [ ] [T087] Add transaction boundaries: atomic quiz save + meal_plan creation, atomic payment update + AI trigger, atomic PDF + email delivery per FR-Q-018
-- [ ] [T088] Implement rollback handling for each transaction boundary with retry capability
-- [ ] [T089] Add comprehensive error logging with Sentry integration for each step failure
+- [x] [T086] Create meal plan delivery orchestration at `backend/src/services/delivery_orchestrator.py` coordinating AI → PDF → Blob → Email flow
+- [x] [T087] Add transaction boundaries: atomic quiz save + meal_plan creation, atomic payment update + AI trigger, atomic PDF + email delivery per FR-Q-018
+- [x] [T088] Implement rollback handling for each transaction boundary with retry capability
+- [x] [T089] Add comprehensive error logging with Sentry integration for each step failure
 
 **Acceptance**: Full flow completes in <90s (p95), errors logged to Sentry, transactions rollback on failure, retries work correctly
 
