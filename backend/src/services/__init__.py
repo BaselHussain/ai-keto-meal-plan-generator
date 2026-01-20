@@ -38,6 +38,12 @@ from .blob_storage import (
     delete_blobs_batch,
     BlobStorageError,
 )
+from .delivery_orchestrator import (
+    orchestrate_meal_plan_delivery,
+    retry_failed_delivery,
+    rollback_failed_delivery,
+    DeliveryOrchestrationError,
+)
 
 __all__ = [
     "Gender",
@@ -63,4 +69,8 @@ __all__ = [
     "delete_blob",
     "delete_blobs_batch",
     "BlobStorageError",
+    "orchestrate_meal_plan_delivery",
+    "retry_failed_delivery",
+    "rollback_failed_delivery",
+    "DeliveryOrchestrationError",
 ]
