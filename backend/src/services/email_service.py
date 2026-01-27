@@ -511,7 +511,11 @@ def _render_delivery_template(
     )
 
 
-def _build_delivery_urls(payment_id: str, user_email: str) -> Dict[str, str]:
+def _build_delivery_urls(
+    payment_id: str,
+    user_email: str,
+    meal_plan_id: Optional[str] = None
+) -> Dict[str, str]:
     """
     Build all URLs needed for the delivery email.
 
@@ -519,23 +523,34 @@ def _build_delivery_urls(payment_id: str, user_email: str) -> Dict[str, str]:
     - PDF download link points to /api/download-pdf endpoint which generates
       fresh signed URL on-demand (not a pre-signed URL)
     - Magic link points to /recover-plan page
-    - Account creation link pre-fills the email
+    - Account creation link includes signed token with pre-filled email (T100)
 
     Args:
         payment_id: Paddle payment ID for download URL
         user_email: User's email for account creation URL
+        meal_plan_id: Optional meal plan ID to encode in signup token
 
     Returns:
         Dict with pdf_download_url, magic_link_url, create_account_url
     """
     from urllib.parse import quote
+    from src.services.auth_service import create_signup_token
+
+    # Generate signed signup token encoding email, meal_plan_id, payment_id (T100)
+    # Token expires in 7 days, encodes user_email for readonly field (FR-R-001)
+    signup_token = create_signup_token(
+        email=user_email,
+        meal_plan_id=meal_plan_id,
+        payment_id=payment_id,
+    )
 
     encoded_email = quote(user_email, safe="")
+    encoded_token = quote(signup_token, safe="")
 
     return {
         "pdf_download_url": f"{APP_URL}/api/download-pdf?payment_id={payment_id}",
         "magic_link_url": f"{APP_URL}/recover-plan",
-        "create_account_url": f"{APP_URL}/create-account?email={encoded_email}",
+        "create_account_url": f"{APP_URL}/create-account?token={encoded_token}",
     }
 
 
@@ -546,6 +561,7 @@ async def send_delivery_email(
     pdf_filename: str,
     payment_id: str,
     email_already_sent: bool = False,
+    meal_plan_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Send meal plan delivery email via Resend API with PDF attachment.
@@ -557,6 +573,7 @@ async def send_delivery_email(
     - T083: Retry logic (3 attempts, exponential backoff: 2s, 4s, 8s)
     - T084: Returns sent_at timestamp for caller to update database
     - T085: Idempotency check to prevent duplicate sends on webhook retries
+    - T100: Account creation link with signed token
 
     Args:
         to_email: Recipient email address
@@ -565,6 +582,7 @@ async def send_delivery_email(
         pdf_filename: Filename for PDF attachment (e.g., "keto-meal-plan-30-days.pdf")
         payment_id: Paddle payment ID for building download URL
         email_already_sent: If True, return early with success (idempotency check, T085)
+        meal_plan_id: Optional meal plan ID to encode in signup token (T100)
 
     Returns:
         Dict with keys:
@@ -652,8 +670,8 @@ async def send_delivery_email(
     # Configure Resend API
     resend.api_key = RESEND_API_KEY
 
-    # Build URLs for email links
-    urls = _build_delivery_urls(payment_id, to_email)
+    # Build URLs for email links (T100: includes signed signup token)
+    urls = _build_delivery_urls(payment_id, to_email, meal_plan_id)
 
     # Load and render email templates
     try:
@@ -813,4 +831,175 @@ async def send_delivery_email(
             "issue_type": "email_delivery_failed",
             "error_details": last_error,
         },
+    }
+
+
+async def send_magic_link_email(
+    to_email: str,
+    magic_link_url: str,
+) -> Dict[str, Any]:
+    """
+    Send magic link recovery email via Resend API with retry logic.
+
+    This function sends a professional HTML email with a magic link for
+    passwordless plan recovery. It implements retry logic with exponential
+    backoff to handle transient failures.
+
+    Args:
+        to_email: Recipient email address
+        magic_link_url: Full magic link URL with token
+
+    Returns:
+        Dict with keys:
+        - success (bool): True if email was sent successfully
+        - message_id (str): Resend message ID (if successful)
+        - error (str): Error message (if failed)
+        - attempts (int): Number of attempts made
+
+    Examples:
+        >>> result = await send_magic_link_email(
+        ...     to_email="user@example.com",
+        ...     magic_link_url="https://yourdomain.com/verify-magic-link?token=abc123..."
+        ... )
+        >>> if result["success"]:
+        ...     print(f"Email sent! Message ID: {result['message_id']}")
+        ... else:
+        ...     print(f"Failed: {result['error']}")
+
+    Error Cases:
+        - Missing API key: {"success": False, "error": "RESEND_API_KEY not configured"}
+        - Invalid email: {"success": False, "error": "Invalid recipient email"}
+        - API error: {"success": False, "error": "Resend API error: ..."}
+        - All retries failed: {"success": False, "error": "Failed after 3 attempts: ..."}
+
+    Retry Logic:
+        - Attempts: 3 (initial + 2 retries)
+        - Delays: 2s, 4s, 8s (exponential backoff)
+        - Retries on: Network errors, rate limits, temporary API failures
+        - No retry on: Invalid API key, invalid email format
+
+    Reference:
+        Phase 7.1 - Magic link generation (T090-T093)
+    """
+    # Validate environment configuration
+    if not RESEND_API_KEY:
+        logger.error("RESEND_API_KEY environment variable not set")
+        return {
+            "success": False,
+            "error": "Email service not configured. Please contact support.",
+            "attempts": 0,
+        }
+
+    # Configure Resend API
+    resend.api_key = RESEND_API_KEY
+
+    # Load and render email templates
+    try:
+        html_template = _load_delivery_template("magic_link_email.html")
+        text_template = _load_delivery_template("magic_link_email.txt")
+
+        html_content = (
+            html_template
+            .replace("{magic_link_url}", magic_link_url)
+            .replace("{user_email}", to_email)
+        )
+
+        text_content = (
+            text_template
+            .replace("{magic_link_url}", magic_link_url)
+            .replace("{user_email}", to_email)
+        )
+    except FileNotFoundError as e:
+        logger.error(f"Email template not found: {e}")
+        return {
+            "success": False,
+            "error": f"Email template error: {e}",
+            "attempts": 0,
+        }
+
+    # Retry loop with exponential backoff
+    last_error = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            logger.info(
+                f"Sending magic link email to {to_email} (attempt {attempt}/{MAX_RETRIES})"
+            )
+
+            # Send email via Resend API
+            response = resend.Emails.send({
+                "from": RESEND_FROM_EMAIL,
+                "to": to_email,
+                "subject": "Access Your Keto Meal Plan - Magic Link Inside",
+                "html": html_content,
+                "text": text_content,
+            })
+
+            # Success - extract message ID
+            message_id = response.get("id", "unknown")
+            logger.info(
+                f"Magic link email sent successfully to {to_email} "
+                f"(message_id: {message_id}, attempt: {attempt})"
+            )
+
+            return {
+                "success": True,
+                "message_id": message_id,
+                "attempts": attempt,
+            }
+
+        except resend.exceptions.ResendError as e:
+            # Resend-specific errors
+            error_message = str(e)
+            last_error = error_message
+
+            # Check if error is retryable
+            is_retryable = _is_retryable_error(error_message)
+
+            logger.warning(
+                f"Resend API error on attempt {attempt}/{MAX_RETRIES} "
+                f"for {to_email}: {error_message} "
+                f"(retryable: {is_retryable})"
+            )
+
+            # Don't retry on non-retryable errors (invalid API key, bad email format)
+            if not is_retryable:
+                return {
+                    "success": False,
+                    "error": f"Email delivery failed: {error_message}",
+                    "attempts": attempt,
+                }
+
+            # Retry with exponential backoff
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1]
+                logger.info(f"Retrying in {delay} seconds...")
+                await asyncio.sleep(delay)
+
+        except Exception as e:
+            # Unexpected errors (network issues, etc.)
+            error_message = f"{type(e).__name__}: {str(e)}"
+            last_error = error_message
+
+            logger.warning(
+                f"Unexpected error on attempt {attempt}/{MAX_RETRIES} "
+                f"for {to_email}: {error_message}"
+            )
+
+            # Retry on unexpected errors
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1]
+                logger.info(f"Retrying in {delay} seconds...")
+                await asyncio.sleep(delay)
+
+    # All retries exhausted
+    logger.error(
+        f"Failed to send magic link email to {to_email} after {MAX_RETRIES} attempts. "
+        f"Last error: {last_error}"
+    )
+
+    return {
+        "success": False,
+        "error": f"Email delivery failed after {MAX_RETRIES} attempts. Please try again later.",
+        "attempts": MAX_RETRIES,
     }

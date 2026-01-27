@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Skill(test)",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(python:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

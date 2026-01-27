@@ -43,16 +43,12 @@ class RecoverPlanResponse(BaseModel):
 
 class MagicLinkVerifyResponse(BaseModel):
     """
-    Response after verifying magic link token.
+    Response after verifying magic link token (T094).
 
-    Grants 24-hour session for PDF access.
+    Returns meal plan details if token is valid, unused, and not expired.
     Functional requirement: FR-R-002
     """
-    access_granted: bool = Field(
-        description="Whether magic link verification succeeded",
-        examples=[True]
-    )
-    meal_plan_id: UUID = Field(
+    meal_plan_id: str = Field(
         description="Meal plan ID for PDF download",
         examples=["a1b2c3d4-e5f6-7890-abcd-ef1234567890"]
     )
@@ -60,9 +56,27 @@ class MagicLinkVerifyResponse(BaseModel):
         description="Email address associated with meal plan",
         examples=["user@example.com"]
     )
-    expires_at: datetime = Field(
-        description="Magic link session expiry (24 hours from first use)",
+    created_at: datetime = Field(
+        description="When the meal plan was created",
         examples=["2024-01-15T14:30:00Z"]
+    )
+    pdf_available: bool = Field(
+        description="Whether PDF download is available",
+        examples=[True]
+    )
+
+
+class MagicLinkVerifyErrorResponse(BaseModel):
+    """
+    Error response for invalid/expired/used magic link tokens (T094-T095).
+    """
+    code: str = Field(
+        description="Error code",
+        examples=["TOKEN_EXPIRED", "TOKEN_ALREADY_USED", "TOKEN_INVALID"]
+    )
+    message: str = Field(
+        description="Human-readable error message",
+        examples=["This magic link has expired. Please request a new one."]
     )
 
 
@@ -174,14 +188,35 @@ class DashboardResponse(BaseModel):
 
 class DownloadPDFResponse(BaseModel):
     """
-    Response for PDF download endpoint (302 redirect).
+    Response for PDF download endpoint (T107).
 
-    This schema documents the redirect behavior, though the actual
-    response will be a 302 redirect with Location header.
-
+    Returns signed URL with 1-hour expiry for secure download.
     Functional requirement: FR-R-005
     """
-    redirect_url: str = Field(
-        description="Vercel Blob signed URL for PDF download (in Location header)",
+    download_url: str = Field(
+        description="Vercel Blob signed URL for PDF download (1-hour expiry)",
         examples=["https://blob.vercel-storage.com/abc123.pdf?signature=xyz..."]
+    )
+    expires_in: int = Field(
+        description="Seconds until signed URL expires",
+        examples=[3600]
+    )
+
+
+class DownloadPDFErrorResponse(BaseModel):
+    """
+    Error response for download rate limit exceeded (T105).
+    """
+    code: str = Field(
+        description="Error code",
+        examples=["RATE_LIMITED", "NOT_FOUND", "UNAUTHORIZED", "PDF_NOT_AVAILABLE"]
+    )
+    message: str = Field(
+        description="Human-readable error message",
+        examples=["Download limit reached. Try again in 12 hours."]
+    )
+    retry_after: Optional[int] = Field(
+        default=None,
+        description="Seconds until rate limit resets (only for RATE_LIMITED)",
+        examples=[43200]
     )

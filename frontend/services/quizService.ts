@@ -1,9 +1,16 @@
 import { CompleteQuizData } from '../lib/validations/quiz/steps';
+import { QuizData } from '../hooks/useQuizState';
+import { getAccessToken } from './authService';
 
 /**
  * Quiz submission service
- * Handles API communication for quiz data submission
+ * Handles API communication for quiz data submission and progress saving
  * Following frontend-quiz-engineer.md guidelines for error handling
+ *
+ * Features:
+ * - Quiz submission (unauthenticated and authenticated)
+ * - Incremental quiz progress saves (T113 - authenticated users only)
+ * - Cross-device resume (T114 - load saved progress on login)
  */
 
 interface QuizSubmissionResponse {
@@ -206,3 +213,210 @@ export function getErrorMessage(error: unknown): string {
 }
 
 export { QuizServiceError };
+
+/**
+ * =============================================================================
+ * QUIZ PROGRESS SAVING (T113, T114)
+ * =============================================================================
+ */
+
+// Save Progress Response
+export interface SaveProgressResponse {
+  success: boolean;
+  saved_at: string;
+  current_step: number;
+}
+
+// Load Progress Response
+export interface LoadProgressResponse {
+  quiz_data: Partial<QuizData>;
+  current_step: number;
+  saved_at: string;
+}
+
+/**
+ * Save quiz progress to backend for authenticated users (T113).
+ *
+ * This enables cross-device sync and recovery. Only works for authenticated users
+ * with valid access token. Unauthenticated users continue using localStorage.
+ *
+ * @param currentStep - Current quiz step (1-20)
+ * @param quizData - Partial or complete quiz data to save
+ * @returns SaveProgressResponse with success status and timestamp
+ * @throws QuizServiceError on failure (network, auth, validation)
+ *
+ * Example:
+ *   const result = await saveQuizProgress(10, {
+ *     step_1: 'female',
+ *     step_2: 'moderately_active',
+ *     step_3: ['chicken', 'turkey'],
+ *     // ... partial data up to step 10
+ *   });
+ *   console.log(`Saved at ${result.saved_at}`);
+ */
+export async function saveQuizProgress(
+  currentStep: number,
+  quizData: Partial<QuizData>
+): Promise<SaveProgressResponse> {
+  // Get access token from localStorage
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    throw new QuizServiceError(
+      'Not authenticated. Please log in to save progress.',
+      401,
+      'not_authenticated'
+    );
+  }
+
+  try {
+    const response = await fetch('/api/v1/quiz/save-progress', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        current_step: currentStep,
+        quiz_data: quizData,
+      }),
+    });
+
+    if (!response.ok) {
+      // Handle HTTP errors
+      const errorData: QuizSubmissionError = await response
+        .json()
+        .catch(() => ({
+          error: 'Failed to save quiz progress',
+        }));
+
+      // Special handling for authentication errors
+      if (response.status === 401) {
+        throw new QuizServiceError(
+          'Your session has expired. Please log in again.',
+          401,
+          'session_expired'
+        );
+      }
+
+      throw new QuizServiceError(
+        errorData.error || `HTTP ${response.status}: ${response.statusText}`,
+        response.status,
+        errorData.details
+      );
+    }
+
+    const data: SaveProgressResponse = await response.json();
+    return data;
+  } catch (error) {
+    // Handle network errors and other exceptions
+    if (error instanceof QuizServiceError) {
+      throw error;
+    }
+
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new QuizServiceError(
+        'Network error. Please check your internet connection and try again.',
+        0,
+        'network_error'
+      );
+    }
+
+    // Unknown error
+    throw new QuizServiceError(
+      'An unexpected error occurred while saving progress. Please try again.',
+      500,
+      'unknown_error'
+    );
+  }
+}
+
+/**
+ * Load saved quiz progress from backend for authenticated users (T114).
+ *
+ * Enables cross-device resume. Called on authenticated user login to restore
+ * their last saved quiz state.
+ *
+ * @returns LoadProgressResponse with quiz data and current step, or null if no saved progress
+ * @throws QuizServiceError on failure (network, auth)
+ *
+ * Example:
+ *   const savedProgress = await loadQuizProgress();
+ *   if (savedProgress) {
+ *     form.reset(savedProgress.quiz_data);
+ *     setCurrentStep(savedProgress.current_step);
+ *   }
+ */
+export async function loadQuizProgress(): Promise<LoadProgressResponse | null> {
+  // Get access token from localStorage
+  const accessToken = getAccessToken();
+
+  if (!accessToken) {
+    throw new QuizServiceError(
+      'Not authenticated. Please log in to load progress.',
+      401,
+      'not_authenticated'
+    );
+  }
+
+  try {
+    const response = await fetch('/api/v1/quiz/load-progress', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    // 404 means no saved progress (this is expected, not an error)
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      // Handle HTTP errors
+      const errorData: QuizSubmissionError = await response
+        .json()
+        .catch(() => ({
+          error: 'Failed to load quiz progress',
+        }));
+
+      // Special handling for authentication errors
+      if (response.status === 401) {
+        throw new QuizServiceError(
+          'Your session has expired. Please log in again.',
+          401,
+          'session_expired'
+        );
+      }
+
+      throw new QuizServiceError(
+        errorData.error || `HTTP ${response.status}: ${response.statusText}`,
+        response.status,
+        errorData.details
+      );
+    }
+
+    const data: LoadProgressResponse = await response.json();
+    return data;
+  } catch (error) {
+    // Handle network errors and other exceptions
+    if (error instanceof QuizServiceError) {
+      throw error;
+    }
+
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new QuizServiceError(
+        'Network error. Please check your internet connection and try again.',
+        0,
+        'network_error'
+      );
+    }
+
+    // Unknown error
+    throw new QuizServiceError(
+      'An unexpected error occurred while loading progress. Please try again.',
+      500,
+      'unknown_error'
+    );
+  }
+}

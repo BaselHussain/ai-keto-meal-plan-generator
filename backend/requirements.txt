@@ -28,8 +28,8 @@ reportlab>=4.0.9
 openai-agents>=0.1.0  # OpenAI Agents SDK (includes openai dependency)
 
 # Authentication
-bcrypt>=4.1.2
-python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4  # Password hashing with bcrypt
+python-jose[cryptography]>=3.3.0  # JWT token generation
 
 # Email Service
 resend>=2.1.0

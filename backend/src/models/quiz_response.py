@@ -142,6 +142,14 @@ class QuizResponse(Base):
         doc="Quiz submission timestamp (UTC)"
     )
 
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=True,
+        doc="Last progress save timestamp (for T113 incremental saves)"
+    )
+
     # Payment tracking
     payment_id: Mapped[Optional[str]] = mapped_column(
         String(255),

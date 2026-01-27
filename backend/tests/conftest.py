@@ -15,6 +15,7 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
+from httpx import AsyncClient, ASGITransport
 
 # Add src directory to Python path for imports
 backend_dir = Path(__file__).parent.parent
@@ -113,3 +114,120 @@ async def test_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession,
         yield session
         # Rollback any uncommitted changes after test (automatic cleanup)
         await session.rollback()
+
+
+# Alias for test_session (for backward compatibility)
+@pytest_asyncio.fixture
+async def async_db(test_session: AsyncSession) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Alias for test_session fixture (for backward compatibility).
+
+    Provides async database session for integration tests.
+    """
+    yield test_session
+
+
+# Test client fixture
+@pytest_asyncio.fixture
+async def async_client(test_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """
+    Create test HTTP client with FastAPI app.
+
+    Provides AsyncClient for making HTTP requests to FastAPI endpoints
+    during integration tests. Database session is overridden to use
+    test database.
+    """
+    # Import app here to avoid circular imports
+    from src.main import app
+    from src.lib.database import get_db
+
+    # Override get_db dependency to use test session
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        yield test_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    # Create async client
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+    # Clear dependency overrides after test
+    app.dependency_overrides.clear()
+
+
+# Alias for async_client (for backward compatibility)
+@pytest_asyncio.fixture
+async def client(async_client: AsyncClient) -> AsyncGenerator[AsyncClient, None]:
+    """
+    Alias for async_client fixture (for backward compatibility).
+
+    Provides HTTP client for integration tests.
+    """
+    yield async_client
+
+
+# Alias for test_session (db_session)
+@pytest_asyncio.fixture
+async def db_session(test_session: AsyncSession) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Alias for test_session fixture (for backward compatibility).
+
+    Provides database session for integration tests.
+    """
+    yield test_session
+
+
+# Sample meal plan fixture
+@pytest_asyncio.fixture
+async def sample_meal_plan(db_session: AsyncSession):
+    """
+    Create a sample meal plan for testing.
+
+    Returns a completed meal plan with PDF available.
+    """
+    from datetime import datetime, timedelta
+    from src.models.meal_plan import MealPlan
+    from src.lib.email_utils import normalize_email
+
+    meal_plan = MealPlan(
+        payment_id="pay_test_123",
+        email="test@example.com",
+        normalized_email=normalize_email("test@example.com"),
+        pdf_blob_path="https://blob.vercel-storage.com/test-meal-plan.pdf",
+        calorie_target=1650,
+        preferences_summary={
+            "excluded_foods": ["beef", "pork"],
+            "preferred_proteins": ["chicken", "fish"],
+            "dietary_restrictions": "No dairy"
+        },
+        ai_model="gpt-4o",
+        status="completed",
+        email_sent_at=datetime.utcnow() - timedelta(hours=1),  # Sent 1 hour ago (outside grace period)
+        created_at=datetime.utcnow() - timedelta(hours=2),
+    )
+
+    db_session.add(meal_plan)
+    await db_session.commit()
+    await db_session.refresh(meal_plan)
+
+    return meal_plan
+
+
+# Redis client fixture
+@pytest_asyncio.fixture
+async def redis_client():
+    """
+    Provide Redis client for integration tests.
+
+    Uses test Redis instance to avoid polluting production data.
+    """
+    from src.lib.redis_client import get_redis
+
+    redis = await get_redis()
+    yield redis
+
+    # Clean up test keys after test
+    # Note: In production tests, you might want to use a separate Redis DB
+    # or flush specific test keys only
+    # await redis.flushdb()  # Use with caution - only in isolated test environment
