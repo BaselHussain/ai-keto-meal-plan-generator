@@ -250,37 +250,49 @@ All specialized agents, skills, and commands are defined in the `.claude/` direc
 
 Use these specialized agents via **Task tool** for domain-specific work. Each agent has deep expertise in its area and should be used for the specified task types.
 
+### Critical Agent Protocols
+
+**ALL agents must follow these protocols:**
+
+1. **Output Policy**: DO NOT create COMPLETION_SUMMARY.md, GUIDE.md, or documentation files. Only create required code/config files. Report completion verbally.
+
+2. **Context7 Usage**: Agents requiring external documentation (ai-specialist, database-engineer, frontend-engineer, frontend-payment-engineer, pdf-designer) MUST use Context7 MCP server (`mcp__context7__resolve-library-id` → `mcp__context7__query-docs`) before implementing. Never rely on potentially outdated internal knowledge.
+
+3. **Security First**: All agents must follow secure coding practices. Never log sensitive data (tokens, passwords, payment info). Use parameterized queries. Validate all inputs.
+
+4. **Testing Required**: All code changes must include or update relevant tests. Run tests before reporting completion.
+
 #### AI & Backend Agents
 
 | Agent | Description | When to Use |
 |-------|-------------|-------------|
-| `ai-specialist` | OpenAI Agents SDK expert. Handles agent architectures, dynamic prompts, tool calling, structured outputs with Pydantic, streaming, retry/fallback logic, keto meal plan generation. | T067-T073 (AI Generation), any OpenAI Agents SDK work |
-| `backend-engineer` | FastAPI backend expert. Implements API routes, database models, migrations, async endpoints, service integrations (Paddle, Resend, Vercel Blob, Neon DB), error handling, rate limiting. | T086-T089 (Orchestration), general backend tasks |
-| `database-engineer` | Database architecture expert. Creates SQLAlchemy models, Alembic migrations, FastAPI endpoints, JSONB schemas, Redis setup, query optimization, data layer tests. | T014-T022 (Database Models & Migrations) |
-| `payment-webhook-engineer` | Paddle integration expert. Handles checkout sessions, webhook handlers, signature validation, idempotency, distributed locks, refunds/chargebacks, payment security. | T057-T066 (Paddle Integration & Webhooks) |
+| `ai-specialist` | OpenAI Agents SDK expert. Handles agent architectures, dynamic prompts, tool calling, structured outputs with Pydantic, streaming, retry/fallback logic, keto meal plan generation. | T067-T073 (AI Generation), any OpenAI Agents SDK work. **MUST use Context7 MCP server before implementing. NO COMPLETION.md files.** |
+| `backend-engineer` | FastAPI backend expert. Implements API routes, database models, migrations, async endpoints, service integrations (Paddle, Resend, Vercel Blob, Neon DB), error handling, rate limiting. | T086-T089 (Orchestration), general backend tasks. **NO COMPLETION.md files. Report completion verbally.** |
+| `database-engineer` | Database architecture expert. Creates SQLAlchemy models, Alembic migrations, FastAPI endpoints, JSONB schemas, Redis setup, query optimization, data layer tests. | T014-T022 (Database Models & Migrations). **MUST use Context7 MCP server before implementing. Test migrations up/down. NO COMPLETION.md files.** |
+| `payment-webhook-specialist` | Paddle integration expert. Handles checkout sessions, webhook handlers, signature validation, idempotency, distributed locks, refunds/chargebacks, payment security. | T057-T066 (Paddle Integration & Webhooks). **MUST validate webhook signatures. Use distributed locks (Redis). NO COMPLETION.md files.** |
 
 #### Email & Authentication Agents
 
 | Agent | Description | When to Use |
 |-------|-------------|-------------|
-| `email-auth-engineer` | Email authentication expert. Implements email normalization, blacklist management, magic link tokens, JWT auth, Resend integration, email templates, session management. | T053-T056 (Email Verification), T081-T085 (Email Delivery), T090-T097 (Magic Links) |
+| `email-auth-engineer` | Email authentication expert. Implements email normalization, blacklist management, magic link tokens, JWT auth, Resend integration, email templates, session management. | T053-T056 (Email Verification), T081-T085 (Email Delivery), T090-T097 (Magic Links). **Use crypto-secure tokens (32+ bytes). Single-use enforcement. NO COMPLETION.md files.** |
 
 #### Frontend Agents
 
 | Agent | Description | When to Use |
 |-------|-------------|-------------|
-| `frontend-engineer` | Next.js/React expert. Builds pages, components, forms (React Hook Form + Zod), responsive layouts (Tailwind), animations (Framer Motion), API integration. | General frontend components |
-| `frontend-quiz-engineer` | Quiz UI expert. Implements multi-step quiz, form validation, step navigation, quiz animations, form state management, quiz UX. | T030-T048 (Quiz UI & State) |
-| `frontend-payment-engineer` | Payment UI expert. Handles Paddle.js integration, payment forms, email verification UI, checkout flows, payment success/error states. | T057-T061 (Paddle frontend) |
-| `frontend-recovery-engineer` | Recovery UI expert. Builds password recovery, magic link flows, PDF download management, secure file access, account creation via email links. | T092, T097, T102-T104 (Recovery Pages) |
+| `frontend-nextjs-ui` | Next.js/React expert. Builds pages, components, forms (React Hook Form + Zod), responsive layouts (Tailwind), animations (Framer Motion), API integration. | General frontend components. **MUST use Context7 MCP server before implementing. WCAG 2.1 AA compliance. NO COMPLETION.md files.** |
+| `frontend-quiz-engineer` | Quiz UI expert. Implements multi-step quiz, form validation, step navigation, quiz animations, form state management, quiz UX. | T030-T048 (Quiz UI & State). **React Hook Form + Zod validation. Mobile-first responsive. NO COMPLETION.md files.** |
+| `frontend-payment-engineer` | Payment UI expert. Handles Paddle.js integration, payment forms, email verification UI, checkout flows, payment success/error states. | T057-T061 (Paddle frontend). **MUST use Context7 for Paddle.js docs. Never log payment data. NO COMPLETION.md files.** |
+| `frontend-recovery-engineer` | Recovery UI expert. Builds password recovery, magic link flows, PDF download management, secure file access, account creation via email links. | T092, T097, T102-T104 (Recovery Pages). **Never expose tokens client-side. WCAG 2.1 AA compliance. NO COMPLETION.md files.** |
 
 #### Design & Security Agents
 
 | Agent | Description | When to Use |
 |-------|-------------|-------------|
-| `pdf-designer` | ReportLab expert. Creates professional PDF layouts, 30-day meal plans, shopping lists, macro tables, branded documents. Uses Context7 for latest ReportLab docs. | T074-T077 (PDF Generation) |
-| `data-retention-engineer` | Data lifecycle expert. Implements cleanup jobs, SLA monitoring, manual resolution queues, compliance logging, Render cron jobs, GDPR compliance. | T128-T134 (Cleanup Jobs) |
-| `security-auditor` | Security audit expert. Reviews payment flows, authentication systems, API endpoints for vulnerabilities. Checks rate limiting, idempotency, injection prevention. | T146, T127A-F (Security Testing) |
+| `pdf-designer` | ReportLab expert. Creates professional PDF layouts, 30-day meal plans, shopping lists, macro tables, branded documents. Uses Context7 for latest ReportLab docs. | T074-T077 (PDF Generation). **MUST use Context7 for ReportLab docs. Target 400-600KB file size. NO COMPLETION.md files.** |
+| `data-retention-engineer` | Data lifecycle expert. Implements cleanup jobs, SLA monitoring, manual resolution queues, compliance logging, Render cron jobs, GDPR compliance. | T128-T134 (Cleanup Jobs). **ALWAYS implement dry-run modes first. Use Redis distributed locks. NO COMPLETION.md files.** |
+| `security-auditor` | Security audit expert. Reviews payment flows, authentication systems, API endpoints for vulnerabilities. Checks rate limiting, idempotency, injection prevention. | T146, T127A-F (Security Testing). **Classify findings: CRITICAL/HIGH/MEDIUM/LOW. Provide code examples. NO COMPLETION.md files.** |
 
 **Example usage:**
 ```

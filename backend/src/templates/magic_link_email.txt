@@ -1,0 +1,29 @@
+KETO MEAL PLAN - RECOVERY LINK
+=====================================
+
+Welcome Back!
+
+You requested access to your personalized keto meal plan.
+
+Click the link below to securely access your plan:
+
+{magic_link_url}
+
+⏰ IMPORTANT SECURITY NOTICE:
+- This link expires in 24 hours for your security
+- The link can only be used once
+- Do not share this link with anyone
+
+If you didn't request this recovery link, you can safely ignore this email.
+Someone may have entered your email address by mistake.
+
+For security reasons, we recommend:
+- Saving your meal plan PDF when you access it
+- Creating a permanent account for easier access
+- Not sharing recovery links with others
+
+---
+This email was sent to: {user_email}
+
+Need help? Contact us at support@ketomealplan.com
+© 2026 Keto Meal Plan. All rights reserved.

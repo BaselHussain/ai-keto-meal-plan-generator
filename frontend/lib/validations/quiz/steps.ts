@@ -111,14 +111,24 @@ export const step17Schema = z.object({
 
 // Step 18: Meals Per Day
 export const step18Schema = z.object({
-  step_18: z.enum(['3_meals'], {
+  step_18: z.enum(['2_meals', '3_meals', '4_meals'], {
     message: 'Please select meals per day',
   }),
 });
 
-// Step 19: Behavioral Patterns
+// Step 19: Personal Traits (FR-Q-005)
 export const step19Schema = z.object({
-  step_19: z.array(z.string()).default([]),
+  step_19: z
+    .array(
+      z.enum([
+        'tired_waking_up',
+        'frequent_cravings',
+        'prefer_salty',
+        'prefer_sweet',
+        'struggle_appetite_control',
+      ])
+    )
+    .default([]),
 });
 
 // Step 20: Biometrics (FR-Q-019)

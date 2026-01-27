@@ -347,44 +347,44 @@ pytest backend/tests/security/ -v
 
 ### 7.1 Magic Link Generation
 
-- [ ] [T090] [US4] Create magic link token generator at `backend/src/services/magic_link.py` with 256-bit entropy, SHA256 hash storage (research.md lines 1074-1140)
-- [ ] [T091] [US4] Implement rate limiting (3 requests per email per 24h) using Redis counters
-- [ ] [T092] [US4] Create public recovery page at `frontend/src/pages/recover-plan.tsx` with email input form
-- [ ] [T093] [US4] Create recovery API endpoint `POST /api/recovery/request-magic-link` at `backend/src/api/recovery.py` with 5 requests per IP per hour rate limit
+- [x] [T090] [US4] Create magic link token generator at `backend/src/services/magic_link.py` with 256-bit entropy, SHA256 hash storage (research.md lines 1074-1140)
+- [x] [T091] [US4] Implement rate limiting (3 requests per email per 24h) using Redis counters
+- [x] [T092] [US4] Create public recovery page at `frontend/src/pages/recover-plan.tsx` with email input form
+- [x] [T093] [US4] Create recovery API endpoint `POST /api/recovery/request-magic-link` at `backend/src/api/recovery.py` with 5 requests per IP per hour rate limit
 
 **Acceptance**: Magic link generated, email sent with 24h expiry link, rate limits enforced, recovery page accessible
 
 ### 7.2 Magic Link Verification
 
-- [ ] [T094] [US4] Create magic link verification endpoint `GET /api/recovery/verify?token=` at `backend/src/api/recovery.py`
-- [ ] [T095] [US4] Implement single-use enforcement: set used_at timestamp, reject subsequent uses
-- [ ] [T096] [US4] Add IP address logging (generation_ip, usage_ip) with mismatch warning but not blocking
-- [ ] [T097] [US4] Create PDF download page at `frontend/src/pages/download.tsx` showing plan details and download button
+- [x] [T094] [US4] Create magic link verification endpoint `GET /api/recovery/verify?token=` at `backend/src/api/recovery.py`
+- [x] [T095] [US4] Implement single-use enforcement: set used_at timestamp, reject subsequent uses
+- [x] [T096] [US4] Add IP address logging (generation_ip, usage_ip) with mismatch warning but not blocking
+- [x] [T097] [US4] Create PDF download page at `frontend/src/pages/download.tsx` showing plan details and download button
 
 **Acceptance**: Magic link works once, expires after 24h, second use rejected with clear error, IP mismatch logged but allowed
 
 ### 7.3 Optional Account Creation
 
-- [ ] [T098] Create account registration endpoint `POST /api/auth/register` at `backend/src/api/auth.py` with email verification, password hashing
-- [ ] [T099] [US4] Create account creation prompt on success page at `frontend/src/components/quiz/SuccessPage.tsx` with Skip option
-- [ ] [T100] Add account creation link to delivery email with signed token encoding purchase_email
-- [ ] [T101] Enforce account email must match purchase email (readonly field, pre-filled) per FR-R-001
+- [x] [T098] Create account registration endpoint `POST /api/auth/register` at `backend/src/api/auth.py` with email verification, password hashing
+- [x] [T099] [US4] Create account creation prompt on success page at `frontend/src/components/quiz/SuccessPage.tsx` with Skip option
+- [x] [T100] Add account creation link to delivery email with signed token encoding purchase_email
+- [x] [T101] Enforce account email must match purchase email (readonly field, pre-filled) per FR-R-001
 
 **Acceptance**: User creates account post-purchase, email must match purchase, account accessible for login, Skip option works
 
 ### 7.4 Account Dashboard
 
-- [ ] [T102] [US4] Create login endpoint `POST /api/auth/login` at `backend/src/api/auth.py` with JWT token generation
-- [ ] [T103] [US4] Create dashboard page at `frontend/src/pages/dashboard.tsx` showing meal plan details, PDF download button, expiry countdown
-- [ ] [T104] [US4] Implement download availability status display: "X days remaining of 90-day retention"
+- [x] [T102] [US4] Create login endpoint `POST /api/auth/login` at `backend/src/api/auth.py` with JWT token generation
+- [x] [T103] [US4] Create dashboard page at `frontend/src/pages/dashboard.tsx` showing meal plan details, PDF download button, expiry countdown
+- [x] [T104] [US4] Implement download availability status display: "X days remaining of 90-day retention"
 
 **Acceptance**: User logs in, dashboard shows meal plan, download button works, expiry countdown accurate
 
 ### 7.5 Download Rate Limiting
 
-- [ ] [T105] [US4] Create download rate limiter at `backend/src/lib/rate_limiting.py` using Redis TTL keys, composite identifier (user_id or email+IP hash), 10 downloads per 24h (research.md lines 1207-1305)
-- [ ] [T106] [US4] Implement 5-minute grace period exclusion after PDF delivery (allows immediate downloads)
-- [ ] [T107] [US4] Create download endpoint `GET /api/download-pdf` with rate limit check, then generate fresh signed URL on-demand from blob path, return redirect or signed URL (FR-R-003, FR-E-002)
+- [x] [T105] [US4] Create download rate limiter at `backend/src/lib/rate_limiting.py` using Redis TTL keys, composite identifier (user_id or email+IP hash), 10 downloads per 24h (research.md lines 1207-1305)
+- [x] [T106] [US4] Implement 5-minute grace period exclusion after PDF delivery (allows immediate downloads)
+- [x] [T107] [US4] Create download endpoint `GET /api/download-pdf` with rate limit check, then generate fresh signed URL on-demand from blob path, return redirect or signed URL (FR-R-003, FR-E-002)
 
 **Acceptance**: Authenticated users limited by user_id, magic link users by email+IP, first 5 min excluded, limit exceeded shows hours until reset, fresh signed URL generated on each download request (1-hour expiry)
 
@@ -405,10 +405,10 @@ pytest backend/tests/security/ -v
 
 ### 8.1 Framer Motion Transitions
 
-- [ ] [T108] [US5] Add Framer Motion animations to QuizContainer for step transitions (300-400ms ease-in-out)
-- [ ] [T109] [US5] Create animated LoadingScreen component at `frontend/src/components/LoadingScreen.tsx` with multi-step progress messages
-- [ ] [T110] [US5] Implement success confirmation animation on SuccessPage with scale effect on download button
-- [ ] [T111] [US5] Add skeleton loaders to dashboard while fetching meal plan data
+- [x] [T108] [US5] Add Framer Motion animations to QuizContainer for step transitions (300-400ms ease-in-out)
+- [x] [T109] [US5] Create animated LoadingScreen component at `frontend/src/components/LoadingScreen.tsx` with multi-step progress messages
+- [x] [T110] [US5] Implement success confirmation animation on SuccessPage with scale effect on download button
+- [x] [T111] [US5] Add skeleton loaders to dashboard while fetching meal plan data
 
 **Acceptance**: Step transitions smooth 60fps, loading messages animate sequentially, success page scales smoothly, no jank on mobile
 
@@ -418,12 +418,21 @@ pytest backend/tests/security/ -v
 
 ### 9.1 Mid-Quiz Signup (Hybrid Auth)
 
-- [ ] [T112] Create mid-quiz signup prompt at `frontend/src/components/quiz/SaveProgressModal.tsx` appearing after Step 10 per FR-Q-020
-- [ ] [T113] Implement incremental quiz saves for authenticated users at `backend/src/api/quiz.py` endpoint `POST /api/quiz/save-progress`
-- [ ] [T114] Add cross-device resume logic: load last saved step from database on authenticated user login
-- [ ] [T115] Display device warning on quiz start page: "Your quiz progress is saved only on this device. Create account during quiz to save across devices."
+- [x] [T112] Create mid-quiz signup prompt at `frontend/components/quiz/SaveProgressModal.tsx` appearing after Step 10 per FR-Q-020
+- [x] [T113] Implement incremental quiz saves for authenticated users at `backend/src/api/quiz.py` endpoint `POST /api/v1/quiz/save-progress`
+- [x] [T114] Add cross-device resume logic: load last saved step from database on authenticated user login
+- [x] [T115] Display device warning on quiz start page: "Your quiz progress is saved only on this device. Create account during quiz to save across devices."
 
 **Acceptance**: Prompt shows after Step 10, account creation works, incremental saves enable cross-device sync, unauthenticated users continue with localStorage
+
+**Implementation Summary (2026-01-27)**:
+- Created `SaveProgressModal.tsx` component with Framer Motion animations, benefits list, and dual CTAs
+- Added `DeviceWarning.tsx` component for quiz start page (shows only for unauthenticated users)
+- Implemented backend endpoints: `POST /api/v1/quiz/save-progress` and `GET /api/v1/quiz/load-progress` with JWT authentication
+- Added `saveQuizProgress()` and `loadQuizProgress()` functions to frontend `quizService.ts`
+- Integrated modal into `QuizContainer.tsx` - appears after Step 10, auto-saves progress for authenticated users
+- Added `updated_at` field to `QuizResponse` model with migration `002_add_quiz_response_updated_at.py`
+- Added `isAuthenticated()` helper to `authService.ts`
 
 ### 9.2 Chargeback Handling
 
@@ -467,10 +476,10 @@ pytest backend/tests/security/ -v
 
 ### 9.6 Admin Dashboard for Manual Resolution
 
-- [ ] [T127G] Create admin authentication middleware at `backend/src/middleware/admin_auth.py` with API key validation (X-API-Key header vs ADMIN_API_KEY env var) + IP whitelist check (ADMIN_IP_WHITELIST env var) per FR-M-005
-- [ ] [T127H] Create admin dashboard endpoint `GET /admin/manual-resolution` at `backend/src/api/admin.py` returning manual_resolution queue entries (pending, in_progress, escalated) with SLA countdown
-- [ ] [T127I] Create admin dashboard UI at `frontend/src/pages/admin/manual-resolution.tsx` showing pending count, time to SLA breach, quick actions (mark resolved, trigger manual PDF generation, issue refund)
-- [ ] [T127J] Implement quick action endpoints: `POST /admin/manual-resolution/{id}/resolve`, `POST /admin/manual-resolution/{id}/regenerate`, `POST /admin/manual-resolution/{id}/refund`
+- [x] [T127G] Create admin authentication middleware at `backend/src/middleware/admin_auth.py` with API key validation (X-API-Key header vs ADMIN_API_KEY env var) + IP whitelist check (ADMIN_IP_WHITELIST env var) per FR-M-005
+- [x] [T127H] Create admin dashboard endpoint `GET /admin/manual-resolution` at `backend/src/api/admin.py` returning manual_resolution queue entries (pending, in_progress, escalated) with SLA countdown
+- [x] [T127I] Create admin dashboard UI at `frontend/app/admin/manual-resolution/page.tsx` showing pending count, time to SLA breach, quick actions (mark resolved, trigger manual PDF generation, issue refund)
+- [x] [T127J] Implement quick action endpoints: `POST /admin/manual-resolution/{id}/resolve`, `POST /admin/manual-resolution/{id}/regenerate`, `POST /admin/manual-resolution/{id}/refund`
 
 **Acceptance**: Admin can access dashboard with valid API key + whitelisted IP, sees pending queue entries with SLA countdown, can execute quick actions (resolve, regenerate, refund), unauthorized requests return 401
 

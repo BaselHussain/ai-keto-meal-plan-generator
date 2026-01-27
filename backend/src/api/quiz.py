@@ -6,6 +6,8 @@ calorie calculation, email normalization, and database persistence.
 
 Endpoints:
     POST /api/quiz/submit - Submit completed 20-step quiz
+    POST /api/quiz/save-progress - Save incremental quiz progress (T113 - authenticated users)
+    GET /api/quiz/load-progress - Load saved quiz progress (T114 - authenticated users)
 """
 
 import logging
@@ -13,13 +15,15 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 
 from src.lib.database import get_db
 from src.lib.email_utils import normalize_email
+from src.services.auth_service import verify_access_token
 from src.services.calorie_calculator import (
     calculate_calorie_target,
     Gender,
@@ -164,7 +168,7 @@ class QuizSubmissionResponse(BaseModel):
 @router.post("/submit", response_model=QuizSubmissionResponse)
 async def submit_quiz(
     request: QuizSubmissionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> QuizSubmissionResponse:
     """
     Submit completed 20-step quiz and calculate calorie target.
@@ -303,4 +307,245 @@ async def submit_quiz(
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred. Please try again later.",
+        )
+
+
+# =============================================================================
+# QUIZ PROGRESS SAVING (T113, T114)
+# =============================================================================
+
+
+class SaveProgressRequest(BaseModel):
+    """Request body for saving quiz progress (T113)."""
+
+    current_step: int = Field(..., ge=1, le=20, description="Current quiz step (1-20)")
+    quiz_data: Dict[str, Any] = Field(..., description="Partial or complete quiz data")
+
+
+class SaveProgressResponse(BaseModel):
+    """Response after saving quiz progress."""
+
+    success: bool = True
+    saved_at: str = Field(..., description="ISO 8601 timestamp of save")
+    current_step: int = Field(..., description="Current step that was saved")
+
+
+class LoadProgressResponse(BaseModel):
+    """Response when loading saved quiz progress."""
+
+    quiz_data: Dict[str, Any] = Field(..., description="Partial or complete quiz data")
+    current_step: int = Field(..., description="Step user was on when they last saved")
+    saved_at: str = Field(..., description="ISO 8601 timestamp of last save")
+
+
+def get_current_user(authorization: str = Header(None)) -> Dict[str, Any]:
+    """
+    Dependency to extract and verify user from JWT access token.
+
+    Args:
+        authorization: Authorization header with Bearer token
+
+    Returns:
+        Dict with user_id and email from JWT payload
+
+    Raises:
+        HTTPException 401: Missing, invalid, or expired token
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing authorization header",
+        )
+
+    # Extract token from "Bearer <token>" format
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization header format. Expected: Bearer <token>",
+        )
+
+    token = parts[1]
+
+    # Verify token
+    payload = verify_access_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+        )
+
+    return {
+        "user_id": payload.get("sub"),
+        "email": payload.get("email"),
+    }
+
+
+@router.post("/save-progress", response_model=SaveProgressResponse)
+async def save_quiz_progress(
+    request: SaveProgressRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> SaveProgressResponse:
+    """
+    Save incremental quiz progress for authenticated users (T113).
+
+    Enables cross-device sync by storing partial quiz data to database.
+    This endpoint requires authentication via JWT access token.
+
+    If user has existing quiz progress, it will be updated. Otherwise, a new
+    record is created.
+
+    Args:
+        request: Quiz progress data (current step + partial quiz data)
+        db: Database session (injected)
+        current_user: Authenticated user info from JWT (injected)
+
+    Returns:
+        SaveProgressResponse with success status and timestamp
+
+    Raises:
+        HTTPException 401: Not authenticated or invalid token
+        HTTPException 500: Database errors
+    """
+    try:
+        user_id = current_user["user_id"]
+        user_email = current_user["email"]
+
+        # Check if user has existing quiz progress (async)
+        stmt = (
+            select(QuizResponse)
+            .where(
+                QuizResponse.user_id == user_id,
+                QuizResponse.payment_id == None,  # Only in-progress quizzes (not submitted)
+            )
+            .order_by(QuizResponse.created_at.desc())
+        )
+        result = await db.execute(stmt)
+        existing_progress = result.scalar_one_or_none()
+
+        saved_at = datetime.utcnow()
+
+        if existing_progress:
+            # Update existing progress
+            existing_progress.quiz_data = request.quiz_data
+            existing_progress.updated_at = saved_at
+
+            logger.info(
+                f"Updated quiz progress for user {user_id} at step {request.current_step}"
+            )
+        else:
+            # Create new progress record
+            quiz_response = QuizResponse(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                email=user_email,
+                normalized_email=normalize_email(user_email),
+                quiz_data=request.quiz_data,
+                calorie_target=0,  # Will be calculated on final submission
+                created_at=saved_at,
+                payment_id=None,  # NULL indicates in-progress (not submitted)
+                pdf_delivered_at=None,
+            )
+
+            db.add(quiz_response)
+
+            logger.info(
+                f"Created new quiz progress for user {user_id} at step {request.current_step}"
+            )
+
+        await db.commit()
+
+        return SaveProgressResponse(
+            saved_at=saved_at.isoformat(),
+            current_step=request.current_step,
+        )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+
+    except Exception as e:
+        # Unexpected errors
+        await db.rollback()
+        logger.error(f"Unexpected error saving quiz progress: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save quiz progress. Please try again.",
+        )
+
+
+@router.get("/load-progress", response_model=LoadProgressResponse)
+async def load_quiz_progress(
+    db: AsyncSession = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> LoadProgressResponse:
+    """
+    Load saved quiz progress for authenticated users (T114).
+
+    Enables cross-device resume by retrieving user's last saved quiz state.
+    Returns the most recent in-progress quiz (payment_id is NULL).
+
+    Args:
+        db: Database session (injected)
+        current_user: Authenticated user info from JWT (injected)
+
+    Returns:
+        LoadProgressResponse with quiz data and current step
+
+    Raises:
+        HTTPException 401: Not authenticated or invalid token
+        HTTPException 404: No saved progress found
+        HTTPException 500: Database errors
+    """
+    try:
+        user_id = current_user["user_id"]
+
+        # Find most recent in-progress quiz (async)
+        stmt = (
+            select(QuizResponse)
+            .where(
+                QuizResponse.user_id == user_id,
+                QuizResponse.payment_id == None,  # Only in-progress quizzes
+            )
+            .order_by(QuizResponse.created_at.desc())
+        )
+        result = await db.execute(stmt)
+        saved_progress = result.scalar_one_or_none()
+
+        if not saved_progress:
+            raise HTTPException(
+                status_code=404,
+                detail="No saved quiz progress found",
+            )
+
+        # Infer current step from quiz_data keys
+        # Count how many steps have data
+        quiz_data = saved_progress.quiz_data
+        current_step = 1
+        for i in range(1, 21):
+            step_key = f"step_{i}"
+            if step_key in quiz_data and quiz_data[step_key]:
+                current_step = i
+
+        logger.info(
+            f"Loaded quiz progress for user {user_id}, step {current_step}"
+        )
+
+        return LoadProgressResponse(
+            quiz_data=quiz_data,
+            current_step=current_step,
+            saved_at=saved_progress.created_at.isoformat(),
+        )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+
+    except Exception as e:
+        # Unexpected errors
+        logger.error(f"Unexpected error loading quiz progress: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load quiz progress. Please try again.",
         )
