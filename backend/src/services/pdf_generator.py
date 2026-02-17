@@ -36,7 +36,7 @@ from reportlab.platypus import (
     KeepTogether,
 )
 
-from src.schemas.meal_plan import MealPlanStructure
+from src.schemas.meal_plan import MealPlanStructure, PreferencesSummary
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -207,6 +207,7 @@ def _create_meal_table_style() -> TableStyle:
         ("FONTSIZE", (0, -1), (-1, -1), 10),
         ("TOPPADDING", (0, -1), (-1, -1), 8),
         ("BOTTOMPADDING", (0, -1), (-1, -1), 8),
+        ("SPAN", (0, -1), (1, -1)),  # Merge first two cells for DAILY TOTAL text
 
         # Body text
         ("FONTSIZE", (0, 1), (-1, -2), 9),
@@ -241,10 +242,10 @@ def _build_cover_page(
     Implements: T074 - Cover page with user info, calorie target, macros
     """
     # Main title
-    story.append(Spacer(1, 1.5 * inch))
+    story.append(Spacer(1, 1.0 * inch))
     story.append(Paragraph("Your Personalized", styles["subtitle"]))
     story.append(Paragraph("30-Day Keto Meal Plan", styles["title"]))
-    story.append(Spacer(1, 0.5 * inch))
+    story.append(Spacer(1, 0.3 * inch))
 
     # Decorative line
     line_data = [["" * 50]]
@@ -253,7 +254,7 @@ def _build_cover_page(
         ("LINEABOVE", (0, 0), (-1, 0), 2, KETO_GREEN),
     ]))
     story.append(line_table)
-    story.append(Spacer(1, 0.5 * inch))
+    story.append(Spacer(1, 0.3 * inch))
 
     # User info section
     generation_date = datetime.utcnow().strftime("%B %d, %Y")
@@ -296,7 +297,7 @@ def _build_cover_page(
     ]))
     story.append(macro_table)
 
-    story.append(Spacer(1, 0.5 * inch))
+    story.append(Spacer(1, 0.3 * inch))
 
     # Motivational message
     story.append(Paragraph(
@@ -312,7 +313,7 @@ def _build_cover_page(
         styles["motivational"]
     ))
 
-    story.append(Spacer(1, 0.5 * inch))
+    story.append(Spacer(1, 0.2 * inch))
 
     # What's inside section
     story.append(Paragraph(
@@ -476,6 +477,145 @@ def _build_shopping_lists(
             story.append(PageBreak())
 
 
+def _build_preferences_summary(
+    story: list,
+    styles: dict,
+    preferences: PreferencesSummary,
+    calorie_target: int,
+    fat_percent: int,
+    protein_percent: int,
+    carb_percent: int,
+) -> None:
+    """
+    Build the Food Selection Report page showing user preferences from the quiz.
+
+    Placed after cover page, before daily meals.
+    """
+    story.append(Paragraph("Your Food Selection Report", styles["title"]))
+    story.append(Spacer(1, 0.3 * inch))
+
+    story.append(Paragraph(
+        "Based on your quiz responses, here is a summary of your personalized plan settings:",
+        styles["cover_info"]
+    ))
+    story.append(Spacer(1, 0.3 * inch))
+
+    # Calorie and macro summary
+    story.append(Paragraph("Daily Targets", styles["section_header"]))
+    target_data = [
+        ["Metric", "Target"],
+        ["Calories", f"{calorie_target} kcal"],
+        ["Fat", f"{fat_percent}% ({int(calorie_target * fat_percent / 100 / 9)}g)"],
+        ["Protein", f"{protein_percent}% ({int(calorie_target * protein_percent / 100 / 4)}g)"],
+        ["Net Carbs", f"{carb_percent}% (<30g)"],
+    ]
+    target_table = Table(target_data, colWidths=[2.5 * inch, 3.0 * inch])
+    target_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), KETO_GREEN),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("BACKGROUND", (0, 1), (-1, -1), HEADER_BG),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("BOX", (0, 0), (-1, -1), 1, KETO_GREEN),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
+    ]))
+    story.append(target_table)
+    story.append(Spacer(1, 0.3 * inch))
+
+    # Preferred proteins
+    if preferences.preferred_proteins:
+        story.append(Paragraph("Preferred Proteins", styles["section_header"]))
+        for protein in preferences.preferred_proteins:
+            story.append(Paragraph(
+                f"\u2022 {protein}",
+                styles["list_item"]
+            ))
+        story.append(Spacer(1, 0.2 * inch))
+
+    # Excluded foods
+    if preferences.excluded_foods:
+        story.append(Paragraph("Excluded Foods", styles["section_header"]))
+        for food in preferences.excluded_foods:
+            story.append(Paragraph(
+                f"\u2022 {food}",
+                styles["list_item"]
+            ))
+        story.append(Spacer(1, 0.2 * inch))
+
+    # Dietary restrictions
+    if preferences.dietary_restrictions and preferences.dietary_restrictions.strip():
+        story.append(Paragraph("Dietary Restrictions", styles["section_header"]))
+        story.append(Paragraph(
+            preferences.dietary_restrictions,
+            styles["cover_info"]
+        ))
+
+    story.append(PageBreak())
+
+
+def _build_keto_tips(
+    story: list,
+    styles: dict,
+    meal_plan: MealPlanStructure,
+) -> None:
+    """
+    Build the Common Keto Mistakes to Avoid section at the end of the PDF.
+
+    Renders each keto tip with a bold title and description.
+    Functional requirement: FR-A-008
+    """
+    if not meal_plan.keto_tips:
+        return
+
+    story.append(PageBreak())
+    story.append(Paragraph("Common Keto Mistakes to Avoid", styles["title"]))
+    story.append(Spacer(1, 0.3 * inch))
+    story.append(Paragraph(
+        "Follow these tips to maximize your keto success and avoid common pitfalls.",
+        styles["motivational"]
+    ))
+    story.append(Spacer(1, 0.2 * inch))
+
+    # Tip box style
+    tip_title_style = ParagraphStyle(
+        "TipTitle",
+        parent=styles["base"]["Normal"],
+        fontSize=11,
+        textColor=KETO_GREEN_DARK,
+        fontName="Helvetica-Bold",
+        spaceBefore=4,
+        spaceAfter=2,
+    )
+    tip_desc_style = ParagraphStyle(
+        "TipDesc",
+        parent=styles["base"]["Normal"],
+        fontSize=10,
+        textColor=colors.HexColor("#374151"),
+        spaceAfter=8,
+        leftIndent=12,
+    )
+
+    for i, tip in enumerate(meal_plan.keto_tips, 1):
+        # Numbered title
+        story.append(Paragraph(f"{i}. {tip.title}", tip_title_style))
+        story.append(Paragraph(tip.description, tip_desc_style))
+
+        # Light separator between tips
+        if i < len(meal_plan.keto_tips):
+            sep_data = [[""]]
+            sep_table = Table(sep_data, colWidths=[5 * inch])
+            sep_table.setStyle(TableStyle([
+                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#e5e7eb")),
+            ]))
+            story.append(sep_table)
+            story.append(Spacer(1, 0.1 * inch))
+
+
 def _generate_pdf_sync(
     meal_plan: MealPlanStructure,
     calorie_target: int,
@@ -483,6 +623,7 @@ def _generate_pdf_sync(
     protein_percent: int,
     carb_percent: int,
     user_email: Optional[str],
+    preferences: Optional[PreferencesSummary] = None,
 ) -> bytes:
     """
     Synchronous PDF generation using ReportLab.
@@ -520,6 +661,18 @@ def _generate_pdf_sync(
         user_email=user_email,
     )
 
+    # Food Selection Report (preferences summary)
+    if preferences:
+        _build_preferences_summary(
+            story=story,
+            styles=styles,
+            preferences=preferences,
+            calorie_target=calorie_target,
+            fat_percent=fat_percent,
+            protein_percent=protein_percent,
+            carb_percent=carb_percent,
+        )
+
     # 30 days of meals
     _build_daily_meals(
         story=story,
@@ -529,6 +682,13 @@ def _generate_pdf_sync(
 
     # Weekly shopping lists
     _build_shopping_lists(
+        story=story,
+        styles=styles,
+        meal_plan=meal_plan,
+    )
+
+    # Keto tips section (at end of PDF)
+    _build_keto_tips(
         story=story,
         styles=styles,
         meal_plan=meal_plan,
@@ -549,6 +709,7 @@ async def generate_pdf(
     protein_percent: int = 25,
     carb_percent: int = 5,
     user_email: Optional[str] = None,
+    preferences: Optional[PreferencesSummary] = None,
 ) -> bytes:
     """
     Generate 30-day keto meal plan PDF with timeout handling.
@@ -560,6 +721,7 @@ async def generate_pdf(
         protein_percent: Target protein percentage (default 25%)
         carb_percent: Target carb percentage (default 5%)
         user_email: Optional user email for cover page personalization
+        preferences: Optional user preferences for Food Selection Report page
 
     Returns:
         bytes: Generated PDF file bytes
@@ -590,6 +752,7 @@ async def generate_pdf(
                 protein_percent,
                 carb_percent,
                 user_email,
+                preferences,
             ),
             timeout=PDF_GENERATION_TIMEOUT,
         )

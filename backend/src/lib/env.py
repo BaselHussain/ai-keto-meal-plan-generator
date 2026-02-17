@@ -127,16 +127,18 @@ class Settings(BaseSettings):
     # =============================================================================
     # AI Service API Keys
     # =============================================================================
-    gemini_api_key: Optional[str] = Field(
-        default=None,
-        alias="GEMINI_API_KEY",
-        description="Google Gemini API key for AI meal plan generation",
-    )
-
+    # NOTE: openai_api_key MUST be defined before gemini_api_key so that
+    # Pydantic v2 field-order validation can see it in info.data
     openai_api_key: Optional[str] = Field(
         default=None,
         alias="OPEN_AI_API_KEY",
         description="OpenAI API key (alternative for AI generation)",
+    )
+
+    gemini_api_key: Optional[str] = Field(
+        default=None,
+        alias="GEMINI_API_KEY",
+        description="Google Gemini API key for AI meal plan generation",
     )
 
     @field_validator("gemini_api_key")
@@ -347,7 +349,7 @@ def validate_env() -> Settings:
         for error in e.errors():
             field_name = error["loc"][0] if error["loc"] else "unknown"
             error_msg = error["msg"]
-            print(f"  ✗ {field_name.upper()}: {error_msg}")
+            print(f"  X {field_name.upper()}: {error_msg}")
 
         print("\n" + "=" * 80)
         print("Please check your .env file and ensure all required variables are set.")

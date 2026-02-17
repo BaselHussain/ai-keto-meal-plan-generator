@@ -1,0 +1,2 @@
+# Production requirements - extensions to base requirements
+gunicorn>=21.2.0

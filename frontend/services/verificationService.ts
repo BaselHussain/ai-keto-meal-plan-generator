@@ -46,8 +46,9 @@ export class VerificationServiceError extends Error {
   }
 }
 
-// API Base URL (relative to frontend, proxied in development)
-const API_BASE_URL = '/api/verification';
+// API Base URL - points to backend server
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = `${BACKEND_URL}/api/v1/verification`;
 
 /**
  * Send verification code to email
@@ -71,7 +72,7 @@ export async function sendVerificationCode(
 
     if (!response.ok) {
       // Handle HTTP errors
-      const errorData: VerificationErrorResponse = await response
+      const errorData = await response
         .json()
         .catch(() => ({
           detail: {
@@ -80,7 +81,8 @@ export async function sendVerificationCode(
           },
         }));
 
-      const detail = errorData.detail || { code: 'unknown_error', message: 'Unknown error' };
+      // Backend may return { error: { code, message } } or { detail: { code, message } }
+      const detail = errorData.detail || errorData.error || { code: 'unknown_error', message: 'Unknown error' };
 
       throw new VerificationServiceError(
         detail.message || `HTTP ${response.status}: ${response.statusText}`,

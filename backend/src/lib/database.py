@@ -24,6 +24,7 @@ Usage:
 """
 
 import os
+import ssl
 import logging
 from typing import AsyncGenerator
 from sqlalchemy import text
@@ -71,6 +72,17 @@ def get_database_url() -> str:
     elif not database_url.startswith("postgresql+asyncpg://"):
         database_url = f"postgresql+asyncpg://{database_url}"
 
+    # Strip query params that asyncpg doesn't understand (sslmode, channel_binding)
+    # SSL is handled via connect_args in create_engine instead
+    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+    parsed = urlparse(database_url)
+    params = parse_qs(parsed.query)
+    # Remove psycopg2-specific params that asyncpg doesn't support
+    for key in ["sslmode", "channel_binding"]:
+        params.pop(key, None)
+    clean_query = urlencode(params, doseq=True)
+    database_url = urlunparse(parsed._replace(query=clean_query))
+
     return database_url
 
 
@@ -104,15 +116,26 @@ def create_engine() -> AsyncEngine:
         poolclass = NullPool
         logger.info("Using NullPool (serverless mode) for database connections")
 
+        # Create SSL context for Neon DB (asyncpg needs explicit SSL)
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
         engine = create_async_engine(
             database_url,
             poolclass=poolclass,
             echo=False,  # Disable SQL query logging in production
             future=True,  # Use SQLAlchemy 2.0 style
+            connect_args={"ssl": ssl_context},
         )
     else:
         # AsyncAdaptedQueuePool for development (connection pooling)
         logger.info("Using AsyncAdaptedQueuePool (connection pooling) for database connections")
+
+        # Create SSL context for Neon DB (asyncpg needs explicit SSL)
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
 
         engine = create_async_engine(
             database_url,
@@ -124,6 +147,7 @@ def create_engine() -> AsyncEngine:
             pool_pre_ping=True,  # Verify connection health before use
             echo=env == "development",  # Log SQL queries in development
             future=True,  # Use SQLAlchemy 2.0 style
+            connect_args={"ssl": ssl_context},
         )
 
     logger.info(f"Database engine created successfully (environment: {env})")

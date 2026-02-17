@@ -232,12 +232,32 @@ class WeeklyShoppingList(BaseModel):
     )
 
 
+class KetoTip(BaseModel):
+    """
+    A keto tip covering common mistakes, hydration, electrolytes, etc.
+
+    Functional requirement: FR-A-008
+    """
+    title: str = Field(
+        min_length=1,
+        max_length=100,
+        description="Short tip title",
+        examples=["Stay Hydrated"]
+    )
+    description: str = Field(
+        min_length=1,
+        max_length=500,
+        description="Detailed tip explanation",
+        examples=["Drink at least 8 glasses of water daily. Keto increases water loss."]
+    )
+
+
 class MealPlanStructure(BaseModel):
     """
-    Complete 30-day meal plan with shopping lists.
+    Complete 30-day meal plan with shopping lists and keto tips.
 
     Expected output from AI generation service.
-    Functional requirement: FR-A-015
+    Functional requirement: FR-A-015, FR-A-008
     """
     days: List[DayMealPlan] = Field(
         min_length=30,
@@ -248,6 +268,11 @@ class MealPlanStructure(BaseModel):
         min_length=4,
         max_length=4,
         description="4 weekly shopping lists (weeks 1-4)"
+    )
+    keto_tips: List[KetoTip] = Field(
+        min_length=5,
+        max_length=10,
+        description="5-10 keto tips covering common mistakes, hydration, electrolytes (FR-A-008)"
     )
 
     @field_validator("days")

@@ -44,6 +44,7 @@ Usage:
     verified = await is_email_verified("user@example.com")
 """
 
+import os
 import secrets
 import logging
 from typing import Dict, Any, Optional
@@ -214,10 +215,16 @@ async def send_verification_code(email: str) -> Dict[str, Any]:
             f"attempts: {email_result.get('attempts', 1)})"
         )
 
-        return {
+        result = {
             "success": True,
             "message": f"Verification code sent to your email (expires in {CODE_EXPIRY_SECONDS // 60} minutes)",
         }
+
+        # In development, include code in response for testing
+        if os.getenv("ENV", "development") != "production":
+            result["code"] = code
+
+        return result
 
     except ValueError as e:
         # Email normalization error

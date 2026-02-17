@@ -27,6 +27,7 @@ from .meal_plan import (
     GenerationRequest,
     GenerationResponse,
     Ingredient,
+    KetoTip,
     Meal,
     MealPlanStructure,
     MealPlanValidationRequest,

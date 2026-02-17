@@ -53,8 +53,10 @@ from typing import Optional
 
 from sqlalchemy import String, DateTime, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import Enum as SQLEnum
 
 from src.lib.database import Base
+from .issue_type import IssueType
 
 
 class ManualResolution(Base):
@@ -129,8 +131,8 @@ class ManualResolution(Base):
     )
 
     # Issue classification
-    issue_type: Mapped[str] = mapped_column(
-        String(50),
+    issue_type: Mapped[IssueType] = mapped_column(
+        SQLEnum(IssueType, name="issue_type_enum"),
         nullable=False,
         doc="Failure category (missing_quiz_data, ai_validation_failed, email_delivery_failed, manual_refund_required)"
     )

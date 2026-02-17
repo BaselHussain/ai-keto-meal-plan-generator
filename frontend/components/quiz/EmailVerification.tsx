@@ -112,7 +112,15 @@ export function EmailVerification({
       }
     } catch (err) {
       if (err instanceof VerificationServiceError) {
-        if (err.cooldownRemaining) {
+        // If already verified, treat as success and proceed
+        if (err.message?.toLowerCase().includes('already verified')) {
+          const verifiedUntilDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          saveVerificationStatus(email, verifiedUntilDate);
+          setIsVerified(true);
+          setVerifiedUntil(verifiedUntilDate);
+          setShowSuccess(true);
+          setTimeout(() => onVerified(), 1500);
+        } else if (err.cooldownRemaining) {
           setCooldownSeconds(err.cooldownRemaining);
           setError(`Please wait ${err.cooldownRemaining} seconds before requesting a new code.`);
         } else {
@@ -124,7 +132,7 @@ export function EmailVerification({
     } finally {
       setIsSending(false);
     }
-  }, [email]);
+  }, [email, onVerified]);
 
   /**
    * Verify the entered code
@@ -226,7 +234,7 @@ export function EmailVerification({
             {email}
           </p>
           <p className="text-xs text-green-600 mt-2">
-            Proceeding to payment...
+            Generating your meal plan...
           </p>
         </div>
       </div>

@@ -59,8 +59,8 @@ logger = logging.getLogger(__name__)
 # SLA deadline for manual resolution (4 hours per spec)
 SLA_DEADLINE_HOURS = 4
 
-# Performance budget (90 seconds p95)
-ORCHESTRATION_TIMEOUT = 90
+# Performance budget (5 min for dev - 30-day meal plan generation is large)
+ORCHESTRATION_TIMEOUT = 360
 
 
 class DeliveryOrchestrationError(Exception):
@@ -582,6 +582,7 @@ async def orchestrate_meal_plan_delivery(
                 meal_plan=meal_plan_data,
                 calorie_target=calorie_target,
                 user_email=email,
+                preferences=preferences,
             )
 
             step_duration = int((datetime.utcnow() - step_start).total_seconds() * 1000)
