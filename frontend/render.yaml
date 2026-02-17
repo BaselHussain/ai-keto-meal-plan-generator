@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: keto-meal-plan-frontend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        sync: false
+      - key: NEXT_PUBLIC_API_BASE_URL
+        sync: false  # Set via Render dashboard, e.g. https://keto-meal-plan-backend.onrender.com/api/v1
+    domains:
+      - keto-meal-plan.yourdomain.com  # Replace with your actual domain

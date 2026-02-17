@@ -13,12 +13,26 @@ import { getAccessToken } from './authService';
  * - Cross-device resume (T114 - load saved progress on login)
  */
 
+interface CalorieBreakdown {
+  bmr: number;
+  tdee: number;
+  activity_multiplier: number;
+  goal_adjustment: number;
+  goal_adjusted: number;
+  final_target: number;
+  clamped: boolean;
+  warning?: string;
+}
+
 interface QuizSubmissionResponse {
   success: boolean;
   quiz_id: string;
   calorie_target: number;
+  calorie_breakdown: CalorieBreakdown;
   message?: string;
 }
+
+export type { QuizSubmissionResponse, CalorieBreakdown };
 
 interface QuizSubmissionError {
   error: string;
@@ -37,16 +51,18 @@ class QuizServiceError extends Error {
   }
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 /**
  * Submit quiz data to backend
- * POST /api/quiz/submit
+ * POST /api/v1/quiz/submit
  */
 export async function submitQuiz(
   quizData: CompleteQuizData,
   email: string
 ): Promise<QuizSubmissionResponse> {
   try {
-    const response = await fetch('/api/quiz/submit', {
+    const response = await fetch(`${API_BASE}/api/v1/quiz/submit`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -24,7 +24,9 @@ from io import BytesIO
 from src.schemas.meal_plan import (
     MealPlanStructure,
     DayMealPlan,
+    KetoTip,
     Meal,
+    PreferencesSummary,
     WeeklyShoppingList,
     Ingredient,
 )
@@ -60,10 +62,22 @@ def create_test_day(day_num: int) -> DayMealPlan:
     )
 
 
+def create_default_keto_tips() -> list:
+    """Create default keto tips for test meal plans."""
+    return [
+        KetoTip(title="Stay Hydrated", description="Drink at least 8 glasses of water daily."),
+        KetoTip(title="Watch Electrolytes", description="Supplement sodium, potassium, and magnesium."),
+        KetoTip(title="Don't Fear Fat", description="Fat is your primary fuel on keto."),
+        KetoTip(title="Read Labels", description="Hidden carbs lurk in sauces and dressings."),
+        KetoTip(title="Expect Keto Flu", description="First week fatigue is normal and temporary."),
+    ]
+
+
 def create_test_meal_plan() -> MealPlanStructure:
     """Create a complete 30-day test meal plan."""
     return MealPlanStructure(
         days=[create_test_day(i) for i in range(1, 31)],
+        keto_tips=create_default_keto_tips(),
         shopping_lists=[
             WeeklyShoppingList(
                 week=1,
@@ -427,3 +441,140 @@ class TestPDFGenerationError:
                 days=[],
                 shopping_lists=[]
             )
+
+
+def create_test_preferences() -> PreferencesSummary:
+    """Create test preferences for Food Selection Report."""
+    return PreferencesSummary(
+        preferred_proteins=["chicken", "salmon", "shrimp"],
+        excluded_foods=["beef", "pork", "rice", "pasta"],
+        dietary_restrictions="No dairy from cows. Prefer coconut-based alternatives.",
+    )
+
+
+def create_test_keto_tips() -> list:
+    """Create test keto tips."""
+    return [
+        KetoTip(title="Stay Hydrated", description="Drink at least 8 glasses of water daily. Keto increases water loss."),
+        KetoTip(title="Watch Your Electrolytes", description="Supplement sodium, potassium, and magnesium to avoid keto flu."),
+        KetoTip(title="Don't Fear Fat", description="Fat is your primary fuel on keto. Embrace healthy fats like avocado and olive oil."),
+        KetoTip(title="Read Labels Carefully", description="Hidden carbs lurk in sauces, dressings, and processed foods."),
+        KetoTip(title="Expect the Keto Flu", description="The first week may bring fatigue and headaches as your body adapts. This is normal and temporary."),
+    ]
+
+
+def create_test_meal_plan_with_extra_tips() -> MealPlanStructure:
+    """Create a meal plan with more keto tips for size comparison testing."""
+    base = create_test_meal_plan()
+    extra_tips = create_test_keto_tips() + [
+        KetoTip(title="Meal Prep Sundays", description="Prepare meals in advance to stay on track during busy weekdays."),
+        KetoTip(title="Track Your Macros", description="Use a food tracking app for the first few weeks until you learn portion sizes."),
+        KetoTip(title="Sleep Matters", description="Poor sleep can stall weight loss and increase cravings for carbs."),
+        KetoTip(title="Avoid Cheat Days Early", description="In the first month, even one high-carb day can knock you out of ketosis for days."),
+        KetoTip(title="Eat Enough Calories", description="Under-eating on keto can slow your metabolism. Focus on healthy fats."),
+    ]
+    return MealPlanStructure(
+        days=base.days,
+        shopping_lists=base.shopping_lists,
+        keto_tips=extra_tips,
+    )
+
+
+class TestPDFPreferencesSummary:
+    """Test Food Selection Report page."""
+
+    @pytest.mark.asyncio
+    async def test_pdf_with_preferences(self):
+        """Verify PDF generates with preferences summary page."""
+        from src.services.pdf_generator import generate_pdf
+
+        meal_plan = create_test_meal_plan()
+        preferences = create_test_preferences()
+
+        pdf_bytes = await generate_pdf(
+            meal_plan=meal_plan,
+            calorie_target=2000,
+            user_email="test@example.com",
+            preferences=preferences,
+        )
+
+        assert isinstance(pdf_bytes, bytes)
+        assert len(pdf_bytes) > 0
+        assert pdf_bytes[:5] == b'%PDF-'
+
+    @pytest.mark.asyncio
+    async def test_pdf_without_preferences(self):
+        """Verify PDF generates without preferences (backward compatible)."""
+        from src.services.pdf_generator import generate_pdf
+
+        meal_plan = create_test_meal_plan()
+
+        pdf_bytes = await generate_pdf(
+            meal_plan=meal_plan,
+            calorie_target=2000,
+            user_email="test@example.com",
+        )
+
+        assert isinstance(pdf_bytes, bytes)
+        assert len(pdf_bytes) > 0
+
+
+class TestPDFKetoTips:
+    """Test Common Keto Mistakes to Avoid section."""
+
+    @pytest.mark.asyncio
+    async def test_pdf_with_keto_tips(self):
+        """Verify PDF generates with keto tips section."""
+        from src.services.pdf_generator import generate_pdf
+
+        meal_plan = create_test_meal_plan_with_extra_tips()
+
+        pdf_bytes = await generate_pdf(
+            meal_plan=meal_plan,
+            calorie_target=2000,
+            user_email="test@example.com",
+        )
+
+        assert isinstance(pdf_bytes, bytes)
+        assert len(pdf_bytes) > 0
+        assert pdf_bytes[:5] == b'%PDF-'
+
+    @pytest.mark.asyncio
+    async def test_pdf_with_extra_tips_larger(self):
+        """PDF with more keto tips should be larger."""
+        from src.services.pdf_generator import generate_pdf
+
+        meal_plan_base = create_test_meal_plan()
+        meal_plan_extra = create_test_meal_plan_with_extra_tips()
+
+        pdf_base = await generate_pdf(
+            meal_plan=meal_plan_base,
+            calorie_target=2000,
+        )
+        pdf_extra = await generate_pdf(
+            meal_plan=meal_plan_extra,
+            calorie_target=2000,
+        )
+
+        assert len(pdf_extra) > len(pdf_base)
+
+
+class TestPDFDailyTotalSpan:
+    """Test DAILY TOTAL text spanning works in meal tables."""
+
+    @pytest.mark.asyncio
+    async def test_daily_total_table_renders(self):
+        """Verify the DAILY TOTAL row renders without error (SPAN fix)."""
+        from src.services.pdf_generator import generate_pdf
+
+        meal_plan = create_test_meal_plan()
+
+        # If the SPAN causes issues, this would raise an exception
+        pdf_bytes = await generate_pdf(
+            meal_plan=meal_plan,
+            calorie_target=2000,
+            user_email="test@example.com",
+        )
+
+        assert isinstance(pdf_bytes, bytes)
+        assert len(pdf_bytes) > 0

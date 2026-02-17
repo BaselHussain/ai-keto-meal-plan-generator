@@ -1,0 +1,59 @@
+services:
+  - type: web
+    name: keto-meal-plan-backend
+    env: python
+    region: oregon  # Default region
+    plan: free      # Can be changed to starter, or pro as needed
+    buildCommand: pip install -r requirements.txt && pip install -r requirements-prod.txt
+    startCommand: gunicorn src.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    envVars:
+      - key: ENV
+        value: production
+      - key: PYTHON_VERSION
+        sync: false
+      - key: NEON_DATABASE_URL
+        sync: false  # Set via Render dashboard
+      - key: REDIS_URL
+        sync: false  # Set via Render dashboard
+      - key: PADDLE_API_KEY
+        sync: false  # Set via Render dashboard
+      - key: PADDLE_WEBHOOK_SECRET
+        sync: false  # Set via Render dashboard
+      - key: RESEND_API_KEY
+        sync: false  # Set via Render dashboard
+      - key: BLOB_READ_WRITE_TOKEN
+        sync: false  # Set via Render dashboard
+      - key: OPEN_AI_API_KEY
+        sync: false  # Set via Render dashboard
+      - key: GEMINI_API_KEY
+        sync: false  # Set via Render dashboard
+      - key: ADMIN_API_KEY
+        sync: false  # Set via Render dashboard
+      - key: SENTRY_BACKEND_DSN
+        sync: false  # Set via Render dashboard, optional
+      - key: SENTRY_RELEASE
+        sync: false  # Set via Render dashboard, optional
+
+# PostgreSQL database configuration
+databases:
+  - name: keto-meal-plan-db
+    region: oregon
+    plan: free  # Can be changed as needed
+    databaseName: keto_meal_plan
+    user: keto_meal_plan_user
+
+# Cron job for cleanup tasks
+crons:
+  - name: keto-meal-plan-cleanup
+    schedule: "0 3 * * 0"  # Run every Sunday at 3 AM UTC (9 PM EST)
+    command: python -m scripts.cleanup.cleanup_cron
+    region: oregon
+    envVars:
+      - key: ENV
+        value: production
+      - key: NEON_DATABASE_URL
+        sync: false
+      - key: BLOB_READ_WRITE_TOKEN
+        sync: false
+      - key: ADMIN_API_KEY
+        sync: false

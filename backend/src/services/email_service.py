@@ -1003,3 +1003,345 @@ async def send_magic_link_email(
         "error": f"Email delivery failed after {MAX_RETRIES} attempts. Please try again later.",
         "attempts": MAX_RETRIES,
     }
+
+
+def _generate_sla_missed_refund_html_template(amount: float, payment_id: str) -> str:
+    """
+    Generate HTML email template for SLA missed refund notification.
+
+    Args:
+        amount: Refund amount
+        payment_id: Paddle payment ID
+
+    Returns:
+        str: HTML email content with professional refund notification template
+    """
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refund Issued - Service Issue</title>
+    <style>
+        body {{
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+        }}
+        .container {{
+            max-width: 600px;
+            margin: 40px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }}
+        .header {{
+            background-color: #ef4444;
+            color: #ffffff;
+            padding: 30px 20px;
+            text-align: center;
+        }}
+        .header h1 {{
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }}
+        .content {{
+            padding: 40px 30px;
+            text-align: center;
+        }}
+        .content p {{
+            color: #374151;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0 0 20px 0;
+        }}
+        .success-container {{
+            background-color: #d1fae5;
+            border: 2px solid #10b981;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }}
+        .success-container p {{
+            color: #065f46;
+            margin: 0;
+            font-size: 15px;
+        }}
+        .refund-section {{
+            background-color: #f9fafb;
+            border-radius: 8px;
+            padding: 25px 20px;
+            margin: 30px 0;
+            text-align: center;
+        }}
+        .refund-amount {{
+            font-size: 32px;
+            font-weight: 700;
+            color: #10b981;
+            margin: 10px 0;
+        }}
+        .payment-id {{
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 10px;
+            word-break: break-all;
+        }}
+        .footer {{
+            background-color: #f9fafb;
+            padding: 30px 30px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+        }}
+        .footer p {{
+            color: #6b7280;
+            font-size: 14px;
+            margin: 5px 0;
+        }}
+        .footer a {{
+            color: #22c55e;
+            text-decoration: none;
+            font-weight: 500;
+        }}
+        .footer a:hover {{
+            text-decoration: underline;
+        }}
+        @media only screen and (max-width: 600px) {{
+            .container {{
+                margin: 20px 10px;
+            }}
+            .header h1 {{
+                font-size: 24px;
+            }}
+            .refund-amount {{
+                font-size: 28px;
+            }}
+            .content {{
+                padding: 30px 20px;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Service Issue - Refund Issued</h1>
+        </div>
+        <div class="content">
+            <p>We sincerely apologize for the delay in delivering your service.</p>
+            <p>Due to missing our service level agreement (SLA) deadline, we've automatically issued a refund for your recent purchase.</p>
+
+            <div class="refund-section">
+                <p style="font-size: 18px; font-weight: 600; color: #374151;">Automatic refund processed:</p>
+                <div class="refund-amount">${amount:.2f}</div>
+                <div class="payment-id">Payment ID: {payment_id}</div>
+            </div>
+
+            <div class="success-container">
+                <p>✓ The refund has been processed and will be returned to your original payment method within 5-10 business days, depending on your bank's policies.</p>
+                <p>✓ If you don't see the refund within this timeframe, please contact your payment provider or reach out to our support team.</p>
+            </div>
+
+            <p>If you still wish to receive your keto meal plan, please contact our support team at the email below.</p>
+
+            <p>We're committed to improving our service and appreciate your patience.</p>
+        </div>
+        <div class="footer">
+            <p>Need help? Contact us at <a href="mailto:support@ketomealplan.com">support@ketomealplan.com</a></p>
+            <p>&copy; 2026 Keto Meal Plan. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+
+def _generate_sla_missed_refund_plain_text_template(amount: float, payment_id: str) -> str:
+    """
+    Generate plain text email template for SLA missed refund notification.
+
+    Args:
+        amount: Refund amount
+        payment_id: Paddle payment ID
+
+    Returns:
+        str: Plain text email content
+    """
+    return f"""
+KETO MEAL PLAN - REFUND ISSUED
+==============================
+
+We sincerely apologize for the delay in delivering your service.
+
+Due to missing our service level agreement (SLA) deadline, we've automatically issued a refund for your recent purchase.
+
+REFUND DETAILS:
+    Amount: ${amount:.2f}
+    Payment ID: {payment_id}
+
+REFUND PROCESSING:
+    - The refund has been processed and will be returned to your original payment method
+    - Please allow 5-10 business days for the refund to appear (bank processing times vary)
+    - If you don't see the refund within this timeframe, contact your payment provider or our support
+
+If you still wish to receive your keto meal plan, please contact our support team.
+
+We're committed to improving our service and appreciate your patience.
+
+---
+Need help? Contact us at support@ketomealplan.com
+© 2026 Keto Meal Plan. All rights reserved.
+"""
+
+
+async def send_sla_missed_refund_email(
+    to_email: str,
+    payment_id: str,
+    amount: float
+) -> Dict[str, Any]:
+    """
+    Send SLA missed refund notification email via Resend API with retry logic.
+
+    This function sends a professional HTML email notifying the customer about
+    an automatic refund issued due to an SLA miss in service delivery.
+    It implements retry logic with exponential backoff to handle transient failures.
+
+    Args:
+        to_email: Recipient email address
+        payment_id: Paddle payment ID that was refunded
+        amount: The refund amount
+
+    Returns:
+        Dict with keys:
+        - success (bool): True if email was sent successfully
+        - message_id (str): Resend message ID (if successful)
+        - error (str): Error message (if failed)
+        - attempts (int): Number of attempts made
+
+    Examples:
+        >>> result = await send_sla_missed_refund_email(
+        ...     to_email="user@example.com",
+        ...     payment_id="txn_0123456789",
+        ...     amount=47.00
+        ... )
+        >>> if result["success"]:
+        ...     print(f"Refund email sent! Message ID: {result['message_id']}")
+        ... else:
+        ...     print(f"Failed: {result['error']}")
+    """
+    # Validate environment configuration
+    if not RESEND_API_KEY:
+        logger.error("RESEND_API_KEY environment variable not set")
+        return {
+            "success": False,
+            "error": "Email service not configured. Please contact support.",
+            "attempts": 0,
+        }
+
+    # Validate input values
+    if amount <= 0:
+        logger.error(f"Invalid refund amount: {amount}")
+        return {
+            "success": False,
+            "error": "Invalid refund amount.",
+            "attempts": 0,
+        }
+
+    # Configure Resend API
+    resend.api_key = RESEND_API_KEY
+
+    # Generate email templates
+    html_content = _generate_sla_missed_refund_html_template(amount, payment_id)
+    text_content = _generate_sla_missed_refund_plain_text_template(amount, payment_id)
+
+    # Retry loop with exponential backoff
+    last_error = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            logger.info(
+                f"Sending SLA missed refund email to {to_email} "
+                f"(attempt {attempt}/{MAX_RETRIES}, payment_id={payment_id})"
+            )
+
+            # Send email via Resend API
+            response = resend.Emails.send({
+                "from": RESEND_FROM_EMAIL,
+                "to": to_email,
+                "subject": "Refund Issued - Service Delivery Delay",
+                "html": html_content,
+                "text": text_content,
+            })
+
+            # Success - extract message ID
+            message_id = response.get("id", "unknown")
+            logger.info(
+                f"SLA missed refund email sent successfully to {to_email} "
+                f"(message_id: {message_id}, attempt: {attempt})"
+            )
+
+            return {
+                "success": True,
+                "message_id": message_id,
+                "attempts": attempt,
+            }
+
+        except resend.exceptions.ResendError as e:
+            # Resend-specific errors
+            error_message = str(e)
+            last_error = error_message
+
+            # Check if error is retryable
+            is_retryable = _is_retryable_error(error_message)
+
+            logger.warning(
+                f"Resend API error on attempt {attempt}/{MAX_RETRIES} "
+                f"for {to_email}: {error_message} "
+                f"(retryable: {is_retryable})"
+            )
+
+            # Don't retry on non-retryable errors (invalid API key, bad email format)
+            if not is_retryable:
+                return {
+                    "success": False,
+                    "error": f"Email delivery failed: {error_message}",
+                    "attempts": attempt,
+                }
+
+            # Retry with exponential backoff
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1]
+                logger.info(f"Retrying in {delay} seconds...")
+                await asyncio.sleep(delay)
+
+        except Exception as e:
+            # Unexpected errors (network issues, etc.)
+            error_message = f"{type(e).__name__}: {str(e)}"
+            last_error = error_message
+
+            logger.warning(
+                f"Unexpected error on attempt {attempt}/{MAX_RETRIES} "
+                f"for {to_email}: {error_message}"
+            )
+
+            # Retry on unexpected errors
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1]
+                logger.info(f"Retrying in {delay} seconds...")
+                await asyncio.sleep(delay)
+
+    # All retries exhausted
+    logger.error(
+        f"Failed to send SLA missed refund email to {to_email} after {MAX_RETRIES} attempts. "
+        f"Last error: {last_error}"
+    )
+
+    return {
+        "success": False,
+        "error": f"Email delivery failed after {MAX_RETRIES} attempts. Please try again later.",
+        "attempts": MAX_RETRIES,
+    }

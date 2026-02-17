@@ -25,6 +25,9 @@ from sentry_sdk.integrations.redis import RedisIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from dotenv import load_dotenv
 
+# Load environment variables FIRST before importing modules that read them
+load_dotenv()
+
 # Import database utilities
 from src.lib.database import init_db, close_db
 from src.lib.env import settings
@@ -38,9 +41,6 @@ from src.middleware.error_handler import (
 
 # Import API routers
 from src.api import api_router
-
-# Load environment variables
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(

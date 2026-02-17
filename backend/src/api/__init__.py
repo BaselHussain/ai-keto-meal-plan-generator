@@ -16,6 +16,8 @@ Router Structure:
 - /api/v1/admin - Admin endpoints (future)
 """
 
+import os
+
 from fastapi import APIRouter
 
 # Import route modules
@@ -38,6 +40,11 @@ api_router.include_router(recovery_router, tags=["Recovery"])
 api_router.include_router(auth_router, tags=["Authentication"])
 api_router.include_router(download_router, tags=["Download"])
 api_router.include_router(admin_router, tags=["Admin"])
+
+# Dev-only router (NOT available in production)
+if os.getenv("ENV", "development") != "production":
+    from src.api.dev import router as dev_router
+    api_router.include_router(dev_router, tags=["Development"])
 
 # Add more routers as they are implemented:
 # api_router.include_router(meal_plan_router, prefix="/meal-plans", tags=["Meal Plans"])

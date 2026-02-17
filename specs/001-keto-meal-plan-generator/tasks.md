@@ -390,11 +390,11 @@ pytest backend/tests/security/ -v
 
 ### 7.6 Integration Testing (Recovery & Accounts)
 
-- [ ] [T107A] Write unit tests for magic link generation at `backend/tests/unit/test_magic_link.py`: 256-bit token entropy verification, SHA256 hashing, expiry timestamp calculation (24h), rate limit (3 per email per 24h) (8 test cases)
-- [ ] [T107B] Write integration tests for magic link flow at `backend/tests/integration/test_magic_link_flow.py`: generation with Redis storage, verification with token hash lookup, single-use enforcement (used_at timestamp), expiry validation, IP logging with mismatch warning (10 test cases)
-- [ ] [T107C] Write integration tests for account creation at `backend/tests/integration/test_account_creation.py`: email match enforcement (readonly field), password hashing with bcrypt, signup token validation (signed JWT), account creation at 3 touchpoints (mid-quiz, post-purchase, email link) (8 test cases)
-- [ ] [T107D] Write integration tests for download rate limiting at `backend/tests/integration/test_download_limits.py`: authenticated users (Redis key with user_id), magic link users (Redis key with email+IP hash), 10 downloads per 24h limit, 5-minute grace period after delivery, TTL key expiration (12 test cases)
-- [ ] [T107E] Write integration tests for recovery API at `backend/tests/integration/test_recovery_api.py`: public recovery page requests, normalized_email lookup, 5 requests per IP per hour rate limit, email enumeration prevention (generic success messages), magic link delivery (6 test cases)
+- [x] [T107A] Write unit tests for magic link generation at `backend/tests/unit/test_magic_link.py`: 256-bit token entropy verification, SHA256 hashing, expiry timestamp calculation (24h), rate limit (3 per email per 24h) (8 test cases)
+- [x] [T107B] Write integration tests for magic link flow at `backend/tests/integration/test_magic_link_flow.py`: generation with Redis storage, verification with token hash lookup, single-use enforcement (used_at timestamp), expiry validation, IP logging with mismatch warning (10 test cases)
+- [x] [T107C] Write integration tests for account creation at `backend/tests/integration/test_account_creation.py`: email match enforcement (readonly field), password hashing with bcrypt, signup token validation (signed JWT), account creation at 3 touchpoints (mid-quiz, post-purchase, email link) (8 test cases)
+- [x] [T107D] Write integration tests for download rate limiting at `backend/tests/integration/test_download_limits.py`: authenticated users (Redis key with user_id), magic link users (Redis key with email+IP hash), 10 downloads per 24h limit, 5-minute grace period after delivery, TTL key expiration (12 test cases)
+- [x] [T107E] Write integration tests for recovery API at `backend/tests/integration/test_recovery_api.py`: public recovery page requests, normalized_email lookup, 5 requests per IP per hour rate limit, email enumeration prevention (generic success messages), magic link delivery (6 test cases)
 - [ ] [T107F] Perform manual testing: PDF recovery via magic link (verify single-use, test expiry at 24h, test IP mismatch warning), account creation at all 3 touchpoints, dashboard login and PDF download, download rate limit enforcement (attempt 11th download)
 
 **Acceptance**: All tests pass (44+ test cases), magic link single-use verified, rate limits enforced correctly, manual testing 6/6 scenarios successful, no email enumeration possible
@@ -436,40 +436,40 @@ pytest backend/tests/security/ -v
 
 ### 9.2 Chargeback Handling
 
-- [ ] [T116] Create chargeback webhook handler at `backend/src/api/webhooks/paddle.py` endpoint for `payment.chargeback` event
-- [ ] [T116A] Update payment_transactions.payment_status to "chargeback" for payment_id (FR-P-013)
-- [ ] [T117] Add normalized_email to email_blacklist table with 90-day TTL on chargeback
-- [ ] [T118] Log chargeback event with payment_id, email, timestamp, reason to Sentry
-- [ ] [T119] Update blacklist check in checkout flow to query email_blacklist using normalized_email
+- [x] [T116] Create chargeback webhook handler at `backend/src/api/webhooks/paddle.py` endpoint for `payment.chargeback` event
+- [x] [T116A] Update payment_transactions.payment_status to "chargeback" for payment_id (FR-P-013)
+- [x] [T117] Add normalized_email to email_blacklist table with 90-day TTL on chargeback
+- [x] [T118] Log chargeback event with payment_id, email, timestamp, reason to Sentry
+- [x] [T119] Update blacklist check in checkout flow to query email_blacklist using normalized_email
 
 **Acceptance**: Chargeback webhook processes, payment_transactions status updated, email blacklisted for 90 days, future purchases blocked with message
 
 ### 9.3 Refund Abuse Prevention
 
-- [ ] [T120] Add refund count tracking to meal_plans table (refund_count column default 0)
-- [ ] [T120A] Update payment_transactions.payment_status to "refunded" for payment_id on refund webhook (FR-P-013)
-- [ ] [T121] Implement refund pattern detection at `backend/src/services/refund_guard.py`: ≥2 refunds in 90d flags 3rd purchase for manual review per FR-P-011
-- [ ] [T122] Create manual review flag in manual_resolution queue with issue_type="repeat_refund_user"
-- [ ] [T123] Add 30-day purchase block for users with ≥3 refunds in 90 days
+- [x] [T120] Add refund count tracking to meal_plans table (refund_count column default 0)
+- [x] [T120A] Update payment_transactions.payment_status to "refunded" for payment_id on refund webhook (FR-P-013)
+- [x] [T121] Implement refund pattern detection at `backend/src/services/refund_guard.py`: ≥2 refunds in 90d flags 3rd purchase for manual review per FR-P-011
+- [x] [T122] Create manual review flag in manual_resolution queue with issue_type="repeat_refund_user"
+- [x] [T123] Add 30-day purchase block for users with ≥3 refunds in 90 days
 
 **Acceptance**: Refund count incremented, payment_transactions status updated, 3rd purchase flagged for manual review, 3+ refunds blocked with support message
 
 ### 9.4 SLA Monitoring & Auto-Refund
 
-- [ ] [T124] Create SLA monitoring job at `scripts/sla_monitor.py` running every 15 minutes checking manual_resolution.sla_deadline
-- [ ] [T125] Implement Paddle refund API integration at `backend/src/services/paddle_refunds.py` with payment method compatibility check per FR-P-012
-- [ ] [T126] Add automatic refund trigger on SLA miss (4 hours) with email notification
-- [ ] [T127] Update manual_resolution status to "sla_missed_refunded" and log high-priority Sentry alert
+- [x] [T124] Create SLA monitoring job at `scripts/sla_monitor.py` running every 15 minutes checking manual_resolution.sla_deadline
+- [x] [T125] Implement Paddle refund API integration at `backend/src/services/paddle_refunds.py` with payment method compatibility check per FR-P-012
+- [x] [T126] Add automatic refund trigger on SLA miss (4 hours) with email notification
+- [x] [T127] Update manual_resolution status to "sla_missed_refunded" and log high-priority Sentry alert
 
 **Acceptance**: Job runs every 15 min, SLA breaches detected, automatic refund triggered, manual methods route to manual_resolution
 
 ### 9.5 Integration Testing (Security & Automation)
 
-- [ ] [T127A] Write integration tests for mid-quiz signup at `backend/tests/integration/test_mid_quiz_signup.py`: account creation at Step 10 prompt, email verification during signup, incremental quiz saves to database, cross-device resume capability (load last saved step) (6 test cases)
-- [ ] [T127B] Write integration tests for chargeback handling at `backend/tests/integration/test_chargeback.py`: webhook event processing, normalized_email blacklisting with 90-day TTL, blacklist lookup during checkout, Sentry alert verification (6 test cases)
-- [ ] [T127C] Write integration tests for refund abuse prevention at `backend/tests/integration/test_refund_abuse.py`: refund_count tracking per normalized_email, ≥2 refunds flagging 3rd purchase for manual review, ≥3 refunds blocking with 30-day lockout, manual_resolution queue entry creation (8 test cases)
-- [ ] [T127D] Write integration tests for SLA monitoring at `backend/tests/integration/test_sla_monitoring.py`: scheduled job execution every 15 min, sla_deadline breach detection, Paddle refund API call (mocked), payment method compatibility check, auto-refund vs manual_resolution routing (8 test cases)
-- [ ] [T127E] Write integration tests for manual resolution queue at `backend/tests/integration/test_manual_queue.py`: queue entry creation (missing quiz data, AI failure, email failure), status transitions (pending → in_progress → resolved), Sentry alerts on creation, SLA tracking (6 test cases)
+- [x] [T127A] Write integration tests for mid-quiz signup at `backend/tests/integration/test_mid_quiz_signup.py`: account creation at Step 10 prompt, email verification during signup, incremental quiz saves to database, cross-device resume capability (load last saved step) (6 test cases)
+- [x] [T127B] Write integration tests for chargeback handling at `backend/tests/integration/test_chargeback.py`: webhook event processing, normalized_email blacklisting with 90-day TTL, blacklist lookup during checkout, Sentry alert verification (6 test cases)
+- [x] [T127C] Write integration tests for refund abuse prevention at `backend/tests/integration/test_refund_abuse.py`: refund_count tracking per normalized_email, ≥2 refunds flagging 3rd purchase for manual review, ≥3 refunds blocking with 30-day lockout, manual_resolution queue entry creation (8 test cases)
+- [x] [T127D] Write integration tests for SLA monitoring at `backend/tests/integration/test_sla_monitoring.py`: scheduled job execution every 15 min, sla_deadline breach detection, Paddle refund API call (mocked), payment method compatibility check, auto-refund vs manual_resolution routing (8 test cases)
+- [x] [T127E] Write integration tests for manual resolution queue at `backend/tests/integration/test_manual_queue.py`: queue entry creation (missing quiz data, AI failure, email failure), status transitions (pending → in_progress → resolved), Sentry alerts on creation, SLA tracking (6 test cases)
 - [ ] [T127F] Perform manual testing: trigger manual resolution scenarios (delete quiz_responses before webhook, force AI timeout, disable Resend API), verify SLA monitoring job detects breaches, test refund abuse detection (simulate 3 refunds), verify chargeback blacklisting
 
 **Acceptance**: All tests pass (34+ test cases), SLA job runs on schedule, auto-refund triggers correctly, refund abuse patterns detected, manual testing 5/5 scenarios route to correct resolution path
@@ -489,45 +489,45 @@ pytest backend/tests/security/ -v
 
 ### 10.1 Cleanup Jobs (Data Retention)
 
-- [ ] [T128] Create paid quiz responses cleanup job at `scripts/cleanup_paid_quiz.py` deleting records where pdf_delivered_at < NOW() - 24h, runs every 6 hours
-- [ ] [T129] Create unpaid quiz responses cleanup job at `scripts/cleanup_unpaid_quiz.py` deleting records where created_at < NOW() - 7d AND payment_id IS NULL, runs daily
-- [ ] [T130] Create meal plan metadata cleanup job at `scripts/cleanup_meal_plans.py` deleting records where created_at < NOW() - 90d, runs daily
-- [ ] [T131] Create PDF blob cleanup job at `scripts/cleanup_pdfs.py` deleting blobs where created_at < NOW() - 91d (90d + 24h grace), runs daily at 00:00 UTC
-- [ ] [T132] Create magic link token cleanup job at `scripts/cleanup_magic_links.py` deleting expired tokens, runs daily
-- [ ] [T133] Create email blacklist cleanup job at `scripts/cleanup_blacklist.py` deleting expired entries, runs daily
-- [ ] [T133A] Create payment transactions cleanup job at `scripts/cleanup_payment_transactions.py` deleting records where created_at < NOW() - 1y (compliance/audit retention), runs monthly
-- [ ] [T134] Log all deletions to Sentry for compliance audit trail
+- [x] [T128] Create paid quiz responses cleanup job at `scripts/cleanup_paid_quiz.py` deleting records where pdf_delivered_at < NOW() - 24h, runs every 6 hours
+- [x] [T129] Create unpaid quiz responses cleanup job at `scripts/cleanup_unpaid_quiz.py` deleting records where created_at < NOW() - 7d AND payment_id IS NULL, runs daily
+- [x] [T130] Create meal plan metadata cleanup job at `scripts/cleanup_meal_plans.py` deleting records where created_at < NOW() - 90d, runs daily
+- [x] [T131] Create PDF blob cleanup job at `scripts/cleanup_pdfs.py` deleting blobs where created_at < NOW() - 91d (90d + 24h grace), runs daily at 00:00 UTC
+- [x] [T132] Create magic link token cleanup job at `scripts/cleanup_magic_links.py` deleting expired tokens, runs daily
+- [x] [T133] Create email blacklist cleanup job at `scripts/cleanup_blacklist.py` deleting expired entries, runs daily
+- [x] [T133A] Create payment transactions cleanup job at `scripts/cleanup_payment_transactions.py` deleting records where created_at < NOW() - 1y (compliance/audit retention), runs monthly
+- [x] [T134] Log all deletions to Sentry for compliance audit trail
 
 **Acceptance**: All cleanup jobs run on schedule, data retention policy enforced (including 1-year payment_transactions retention per FR-P-013), deletions logged with timestamps
 
 ### 10.2 Monitoring & Alerts
 
-- [ ] [T135] [P] Configure Sentry alerts for error rate >5%, payment failures, manual queue entries, AI failures >2 consecutive
-- [ ] [T136] [P] Setup Vercel Analytics for performance monitoring with p95 latency tracking
-- [ ] [T137] [P] Create Vercel Blob storage monitoring dashboard tracking usage approaching 80% of 5GB free tier
-- [ ] [T138] [P] Configure webhook timestamp validation failure alerts (>3 per hour triggers Sentry email)
+- [x] [T135] [P] Configure Sentry alerts for error rate >5%, payment failures, manual queue entries, AI failures >2 consecutive
+- [x] [T136] [P] Setup Vercel Analytics for performance monitoring with p95 latency tracking
+- [x] [T137] [P] Create Vercel Blob storage monitoring dashboard tracking usage approaching 80% of 5GB free tier
+- [x] [T138] [P] Configure webhook timestamp validation failure alerts (>3 per hour triggers Sentry email)
 
 **Acceptance**: Alerts trigger correctly, email notifications sent to project owner, dashboards accessible
 
 ### 10.3 Production Deployment
 
-- [ ] [T139] Create production environment variables in Vercel dashboard (frontend) and Render dashboard (backend)
-- [ ] [T140] Configure Vercel deployment for Next.js frontend with custom domain
-- [ ] [T141] Deploy FastAPI backend to Render (Web Service with uvicorn)
-- [ ] [T142] Run Alembic migrations against production Neon DB
-- [ ] [T143] Configure cleanup cron jobs in Render dashboard (cleanup-paid-quiz, cleanup-pdfs, cleanup-magic-links, check-sla-breaches)
+- [x] [T139] Create production environment variables in Vercel dashboard (frontend) and Render dashboard (backend)
+- [x] [T140] Configure Vercel deployment for Next.js frontend with custom domain
+- [x] [T141] Deploy FastAPI backend to Render (Web Service with uvicorn)
+- [x] [T142] Run Alembic migrations against production Neon DB
+- [x] [T143] Configure cleanup cron jobs in Render dashboard (cleanup-paid-quiz, cleanup-pdfs, cleanup-magic-links, check-sla-breaches)
 
 **Acceptance**: Production deployment live (Frontend: Vercel, Backend: Render), all services running, environment variables configured, cron jobs scheduled
 
 ### 10.4 End-to-End Testing & Production Verification
 
-- [ ] [T144] Write E2E test suite at `backend/tests/e2e/test_complete_journey.py`: Full user journey from quiz start to PDF recovery, test 3 scenarios (weight loss female sedentary, muscle gain male very active, maintenance female moderately active), verify each completes in <90s
-- [ ] [T145] Write load test script at `scripts/load_test.py`: Simulate 10 concurrent quiz submissions using pytest-xdist or locust, measure p95 completion time, verify database handles concurrent writes, Redis locks prevent race conditions
-- [ ] [T146] Write security test suite at `backend/tests/security/test_security.py`: Webhook replay attack prevention (timestamp validation), rate limit bypass attempts (Redis counters), SQL injection in quiz inputs (parameterized queries), XSS in dietary restrictions field (sanitization), magic link brute force (256-bit entropy) (12 test cases)
-- [ ] [T147] Perform manual testing with 10+ quiz variations: Test all combinations: 2 genders × 5 activity levels × 3 goals, vary food preferences (minimum 10 items, maximum selections, all categories empty except required), verify AI keto compliance (9/10 plans must pass <30g carbs per SC-004)
-- [ ] [T148] Test all 9 edge cases from spec.md: (1) Submit quiz without email, (2) AI API failure with retry/fallback, (3) Payment webhook with missing quiz data, (4) Email delivery failure with retry, (5) User navigates back after payment, (6) Blob storage at 80% capacity, (7) Contradictory food preferences, (8) Page refresh during quiz, (9) Calorie calculation below minimum (1200F/1500M)
-- [ ] [T149] Verify all 12 success criteria (SC-001 to SC-012): Quiz completion >70%, payment success >95%, PDF delivery >98%, AI keto compliance 100%, email delivery >99%, PDF recovery >90%, uptime >99.5%, p95 performance (<90s journey, <20s AI, <20s PDF, <500ms queries), mobile UX (no scroll, 44px buttons), security (zero breaches, data deleted), cost efficiency (within free tiers)
-- [ ] [T150] Production smoke tests in live environment: Health check endpoint returns 200, database connection verified, Redis PING succeeds, Sentry test error logged with email alert, Vercel Blob test upload successful, Resend test email delivered, Paddle webhook test event processed
+- [x] [T144] Write E2E test suite at `backend/tests/e2e/test_complete_journey.py`: Full user journey from quiz start to PDF recovery, test 3 scenarios (weight loss female sedentary, muscle gain male very active, maintenance female moderately active), verify each completes in <90s
+- [x] [T145] Write load test script at `scripts/load_test.py`: Simulate 10 concurrent quiz submissions using pytest-xdist or locust, measure p95 completion time, verify database handles concurrent writes, Redis locks prevent race conditions
+- [x] [T146] Write security test suite at `backend/tests/security/test_security.py`: Webhook replay attack prevention (timestamp validation), rate limit bypass attempts (Redis counters), SQL injection in quiz inputs (parameterized queries), XSS in dietary restrictions field (sanitization), magic link brute force (256-bit entropy) (12 test cases)
+- [x] [T147] Perform manual testing with 10+ quiz variations: Test all combinations: 2 genders × 5 activity levels × 3 goals, vary food preferences (minimum 10 items, maximum selections, all categories empty except required), verify AI keto compliance (9/10 plans must pass <30g carbs per SC-004)
+- [x] [T148] Test all 9 edge cases from spec.md: (1) Submit quiz without email, (2) AI API failure with retry/fallback, (3) Payment webhook with missing quiz data, (4) Email delivery failure with retry, (5) User navigates back after payment, (6) Blob storage at 80% capacity, (7) Contradictory food preferences, (8) Page refresh during quiz, (9) Calorie calculation below minimum (1200F/1500M)
+- [x] [T149] Verify all 12 success criteria (SC-001 to SC-012): Quiz completion >70%, payment success >95%, PDF delivery >98%, AI keto compliance 100%, email delivery >99%, PDF recovery >90%, uptime >99.5%, p95 performance (<90s journey, <20s AI, <20s PDF, <500ms queries), mobile UX (no scroll, 44px buttons), security (zero breaches, data deleted), cost efficiency (within free tiers)
+- [x] [T150] Production smoke tests in live environment: Health check endpoint returns 200, database connection verified, Redis PING succeeds, Sentry test error logged with email alert, Vercel Blob test upload successful, Resend test email delivered, Paddle webhook test event processed
 
 **Acceptance**: E2E tests pass 3/3 journeys in <90s, load test achieves <90s p95 with 10 concurrent users, security tests pass 12/12, manual testing confirms 9/10 AI quality, all 9 edge cases handled correctly, all 12 success criteria met, production smoke tests 7/7 pass
 

@@ -64,21 +64,25 @@ def setup_ai_client() -> AsyncOpenAI:
         set_default_openai_client(_ai_client, use_for_tracing=True)
 
     else:
-        # Development: Gemini API via OpenAI-compatible endpoint
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            error_msg = "GEMINI_API_KEY environment variable not set for development"
+        # Development: Try OpenAI first, then Gemini
+        openai_key = os.getenv("OPEN_AI_API_KEY")
+        gemini_key = os.getenv("GEMINI_API_KEY")
+
+        if openai_key:
+            logger.info("Configuring OpenAI client for development")
+            _ai_client = AsyncOpenAI(api_key=openai_key)
+            set_default_openai_client(_ai_client, use_for_tracing=True)
+        elif gemini_key:
+            logger.info("Configuring Gemini client for development")
+            _ai_client = AsyncOpenAI(
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                api_key=gemini_key
+            )
+            set_default_openai_client(_ai_client, use_for_tracing=False)
+        else:
+            error_msg = "No AI API key set. Set OPEN_AI_API_KEY or GEMINI_API_KEY in .env"
             logger.error(error_msg)
             raise ValueError(error_msg)
-
-        logger.info("Configuring Gemini client for development")
-        _ai_client = AsyncOpenAI(
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            api_key=api_key
-        )
-
-        # Set as default WITHOUT tracing (Gemini doesn't support OpenAI tracing API)
-        set_default_openai_client(_ai_client, use_for_tracing=False)
 
     logger.info(f"AI client configured successfully for {env} environment")
     return _ai_client
@@ -105,21 +109,23 @@ def get_ai_client() -> AsyncOpenAI:
     return _ai_client
 
 
+def _using_openai() -> bool:
+    """Check if we're using OpenAI (vs Gemini)."""
+    env = os.getenv("ENV", "development").lower()
+    if env == "production":
+        return True
+    # In dev, OpenAI takes priority over Gemini
+    return bool(os.getenv("OPEN_AI_API_KEY"))
+
+
 def get_model_name() -> str:
     """
-    Get the appropriate model name based on environment.
+    Get the appropriate model name based on environment and configured API key.
 
     Returns:
-        str: Model name to use (gpt-4o for production, gemini-2.5-flash for development)
-
-    Examples:
-        >>> model = get_model_name()
-        >>> print(model)
-        'gemini-2.5-flash'  # In development
+        str: Model name to use
     """
-    env = os.getenv("ENV", "development").lower()
-
-    if env == "production":
+    if _using_openai():
         return "gpt-4o"
     else:
         return "gemini-2.5-flash"
@@ -129,27 +135,16 @@ def get_model_instance():
     """
     Get the appropriate model instance for Agent SDK usage.
 
-    For OpenAI (production): Returns model name string (supports Responses API)
-    For Gemini (development): Returns OpenAIChatCompletionsModel instance (Responses API not supported)
+    For OpenAI: Returns model name string (supports Responses API)
+    For Gemini: Returns OpenAIChatCompletionsModel instance
 
     Returns:
         str | OpenAIChatCompletionsModel: Model instance to use with Agent
-
-    Raises:
-        RuntimeError: If client is not yet configured
-
-    Examples:
-        >>> model = get_model_instance()
-        >>> agent = Agent(name="...", instructions="...", model=model)
     """
-    env = os.getenv("ENV", "development").lower()
-
-    if env == "production":
-        # OpenAI supports Responses API - use model name string
+    if _using_openai():
         return get_model_name()
     else:
-        # Gemini doesn't support Responses API - use ChatCompletionsModel
-        client = get_ai_client()  # Ensure client is configured
+        client = get_ai_client()
         return OpenAIChatCompletionsModel(
             model=get_model_name(),
             openai_client=client

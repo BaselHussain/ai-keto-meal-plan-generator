@@ -7,6 +7,7 @@ export { QuizContainer } from './QuizContainer';
 export { StepProgress } from './StepProgress';
 export { FoodSelectionGrid } from './FoodSelectionGrid';
 export { ReviewScreen } from './ReviewScreen';
+export { EmailVerification } from './EmailVerification';
 export { PrivacyBadge } from './PrivacyBadge';
 export { SaveProgressModal } from './SaveProgressModal';
 export { DeviceWarning } from './DeviceWarning';

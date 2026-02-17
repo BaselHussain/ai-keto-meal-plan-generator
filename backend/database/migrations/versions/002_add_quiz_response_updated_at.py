@@ -27,7 +27,7 @@ from sqlalchemy.sql import func
 
 # revision identifiers, used by Alembic.
 revision = '002_add_quiz_response_updated_at'
-down_revision = '001_initial_schema'
+down_revision = '866507e290ed'
 branch_labels = None
 depends_on = None
 
@@ -39,14 +39,13 @@ def upgrade() -> None:
     The column defaults to created_at value for existing rows,
     and will auto-update on row modifications.
     """
-    # Add updated_at column (nullable, defaults to created_at)
+    # Add updated_at column (nullable, no server default - will be set via UPDATE)
     op.add_column(
         'quiz_responses',
         sa.Column(
             'updated_at',
             sa.DateTime(),
             nullable=True,
-            server_default=sa.text('created_at'),
             comment='Last progress save timestamp (for T113 incremental saves)'
         )
     )

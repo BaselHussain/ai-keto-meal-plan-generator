@@ -1,0 +1,269 @@
+"""
+Integration tests for download rate limiting (T107D).
+
+Tests:
+1. Authenticated user: first download succeeds
+2. Authenticated user: 10th download succeeds (at limit)
+3. Authenticated user: 11th download blocked (over limit)
+4. Magic link user: rate limited by email+IP hash
+5. Grace period: unlimited downloads within 5 min after delivery
+6. Grace period: rate limit enforced after 5 min
+7. Rate limit resets after 24h TTL
+8. Different users have independent rate limits
+9. Rate limit status returns remaining count
+10. Redis failure: fail-open allows download
+11. Composite identifier: user_id for auth, email+IP for magic link
+12. Rate limit response includes retry info
+"""
+
+import pytest
+from unittest.mock import AsyncMock, patch, MagicMock
+from datetime import datetime, timedelta
+
+
+@pytest.mark.asyncio
+async def test_first_download_succeeds():
+    """T107D-1: First download for authenticated user succeeds."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    with patch("src.lib.rate_limiting.increment_with_ttl") as mock_incr, \
+         patch("src.lib.redis_client.get_ttl") as mock_get_ttl:
+        mock_incr.return_value = 1  # First download
+        mock_get_ttl.return_value = 86400
+
+        # Should not raise exception (under limit)
+        await check_download_rate_limit(
+            user_id="user-123",
+            email="user@example.com",
+            ip_address="192.168.1.1",
+            email_sent_at=None,
+            limit=10,
+            window_seconds=86400
+        )
+
+
+@pytest.mark.asyncio
+async def test_tenth_download_succeeds():
+    """T107D-2: 10th download succeeds (at limit)."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    with patch("src.lib.rate_limiting.increment_with_ttl") as mock_incr, \
+         patch("src.lib.redis_client.get_ttl") as mock_get_ttl:
+        mock_incr.return_value = 10  # 10th download (at limit)
+        mock_get_ttl.return_value = 86400
+
+        # Should not raise exception (at limit)
+        await check_download_rate_limit(
+            user_id="user-123",
+            email="user@example.com",
+            ip_address="192.168.1.1",
+            email_sent_at=None,
+            limit=10,
+            window_seconds=86400
+        )
+
+
+@pytest.mark.asyncio
+async def test_eleventh_download_blocked():
+    """T107D-3: 11th download blocked (over limit)."""
+    from src.lib.rate_limiting import check_download_rate_limit, RateLimitExceeded
+
+    with patch("src.lib.rate_limiting.increment_with_ttl") as mock_incr, \
+         patch("src.lib.redis_client.get_ttl") as mock_get_ttl:
+        mock_incr.return_value = 11  # 11th download (over limit)
+        mock_get_ttl.return_value = 86400
+
+        # Should raise RateLimitExceeded (over limit)
+        with pytest.raises(RateLimitExceeded):
+            await check_download_rate_limit(
+                user_id="user-123",
+                email="user@example.com",
+                ip_address="192.168.1.1",
+                email_sent_at=None,
+                limit=10,
+                window_seconds=86400
+            )
+
+
+@pytest.mark.asyncio
+async def test_magic_link_user_rate_limited_by_email_ip():
+    """T107D-4: Magic link user rate limited by email+IP hash."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    with patch("src.lib.rate_limiting._get_redis") as mock_redis_fn:
+        mock_redis = AsyncMock()
+        mock_redis_fn.return_value = mock_redis
+        mock_redis.incr.return_value = 11
+        mock_redis.ttl.return_value = 86400
+
+        result = await check_download_rate_limit(
+            user_id=None, email="test@example.com", ip_address="1.2.3.4",
+            email_sent_at=None
+        )
+        assert result["allowed"] is False
+
+
+@pytest.mark.asyncio
+async def test_grace_period_allows_unlimited():
+    """T107D-5: Unlimited downloads within 5 min after delivery."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    recent_delivery = datetime.utcnow() - timedelta(minutes=2)
+
+    with patch("src.lib.rate_limiting._get_redis") as mock_redis_fn:
+        mock_redis = AsyncMock()
+        mock_redis_fn.return_value = mock_redis
+        mock_redis.incr.return_value = 50  # Way over limit
+
+        result = await check_download_rate_limit(
+            user_id="user-123", email=None, ip_address=None,
+            email_sent_at=recent_delivery
+        )
+        assert result["allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_grace_period_expires():
+    """T107D-6: Rate limit enforced after 5 min grace period."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    old_delivery = datetime.utcnow() - timedelta(minutes=10)
+
+    with patch("src.lib.rate_limiting._get_redis") as mock_redis_fn:
+        mock_redis = AsyncMock()
+        mock_redis_fn.return_value = mock_redis
+        mock_redis.incr.return_value = 11
+        mock_redis.ttl.return_value = 86400
+
+        result = await check_download_rate_limit(
+            user_id="user-123", email=None, ip_address=None,
+            email_sent_at=old_delivery
+        )
+        assert result["allowed"] is False
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_resets_after_ttl():
+    """T107D-7: Rate limit resets after 24h TTL."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    with patch("src.lib.rate_limiting._get_redis") as mock_redis_fn:
+        mock_redis = AsyncMock()
+        mock_redis_fn.return_value = mock_redis
+        # TTL expired, new counter starts at 1
+        mock_redis.incr.return_value = 1
+        mock_redis.ttl.return_value = -1  # Key didn't have TTL (new)
+
+        result = await check_download_rate_limit(
+            user_id="user-123", email=None, ip_address=None,
+            email_sent_at=None
+        )
+        assert result["allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_different_users_independent_limits():
+    """T107D-8: Different users have independent rate limits."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    with patch("src.lib.rate_limiting._get_redis") as mock_redis_fn:
+        mock_redis = AsyncMock()
+        mock_redis_fn.return_value = mock_redis
+
+        # User A at limit
+        mock_redis.incr.return_value = 10
+        mock_redis.ttl.return_value = 86400
+        result_a = await check_download_rate_limit(
+            user_id="user-A", email=None, ip_address=None,
+            email_sent_at=None
+        )
+
+        # User B fresh
+        mock_redis.incr.return_value = 1
+        result_b = await check_download_rate_limit(
+            user_id="user-B", email=None, ip_address=None,
+            email_sent_at=None
+        )
+
+        assert result_a["allowed"] is True
+        assert result_b["allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_status_returns_remaining():
+    """T107D-9: Rate limit status returns remaining count."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    with patch("src.lib.rate_limiting._get_redis") as mock_redis_fn:
+        mock_redis = AsyncMock()
+        mock_redis_fn.return_value = mock_redis
+        mock_redis.incr.return_value = 7
+        mock_redis.ttl.return_value = 50000
+
+        result = await check_download_rate_limit(
+            user_id="user-123", email=None, ip_address=None,
+            email_sent_at=None
+        )
+        assert result["allowed"] is True
+        assert "remaining" in result
+        assert result["remaining"] == 3  # 10 - 7
+
+
+@pytest.mark.asyncio
+async def test_redis_failure_fail_open():
+    """T107D-10: Redis failure allows download (fail-open)."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    with patch("src.lib.rate_limiting._get_redis") as mock_redis_fn:
+        mock_redis_fn.return_value = None  # Redis unavailable
+
+        result = await check_download_rate_limit(
+            user_id="user-123", email=None, ip_address=None,
+            email_sent_at=None
+        )
+        assert result["allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_composite_identifier_user_vs_email_ip():
+    """T107D-11: Composite identifier - user_id for auth, email+IP for magic link."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    with patch("src.lib.rate_limiting._get_redis") as mock_redis_fn:
+        mock_redis = AsyncMock()
+        mock_redis_fn.return_value = mock_redis
+        mock_redis.incr.return_value = 1
+        mock_redis.ttl.return_value = 86400
+
+        # Auth user: uses user_id
+        result_auth = await check_download_rate_limit(
+            user_id="user-123", email=None, ip_address=None,
+            email_sent_at=None
+        )
+        assert result_auth["allowed"] is True
+
+        # Magic link user: uses email+IP
+        result_magic = await check_download_rate_limit(
+            user_id=None, email="test@example.com", ip_address="1.2.3.4",
+            email_sent_at=None
+        )
+        assert result_magic["allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_response_includes_retry_info():
+    """T107D-12: Rate limit response includes retry-after info."""
+    from src.lib.rate_limiting import check_download_rate_limit
+
+    with patch("src.lib.rate_limiting._get_redis") as mock_redis_fn:
+        mock_redis = AsyncMock()
+        mock_redis_fn.return_value = mock_redis
+        mock_redis.incr.return_value = 11
+        mock_redis.ttl.return_value = 3600  # 1 hour remaining
+
+        result = await check_download_rate_limit(
+            user_id="user-123", email=None, ip_address=None,
+            email_sent_at=None
+        )
+        assert result["allowed"] is False
+        assert "retry_after" in result or "reset_at" in result or "ttl" in result

@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 MAX_KETO_RETRIES = 2  # FR-A-007: retry up to 2 times on keto compliance failure
 MAX_STRUCTURE_RETRIES = 1  # FR-A-015: retry up to 1 time on structure failure
 RETRY_DELAYS = [2, 4, 8]  # Exponential backoff: 2s, 4s, 8s (FR-A-011)
-AI_GENERATION_TIMEOUT = 60  # Timeout for AI generation (will be tuned during T089D integration testing)
+AI_GENERATION_TIMEOUT = 300  # 5 min timeout - 30-day structured meal plan is a large response
 
 
 class MealPlanGenerationError(Exception):
@@ -215,12 +215,18 @@ OUTPUT STRUCTURE:
 - Each meal includes: name, recipe, ingredients, prep_time, macros (carbs, protein, fat, calories)
 - Daily totals calculated for each day
 - 4 weekly shopping lists organized by category (proteins, vegetables, dairy, fats, pantry)
+- 5-10 keto_tips covering: common beginner mistakes to avoid, hydration reminders, electrolyte guidance, what to expect in first week, fat adaptation signs
+
+SHOPPING LIST REQUIREMENTS:
+- Each weekly shopping list MUST be computed from that week's actual recipes
+- Week 1 = Days 1-7, Week 2 = Days 8-14, Week 3 = Days 15-21, Week 4 = Days 22-30
+- Quantities must reflect actual ingredient usage for that specific week
+- Shopping lists MUST differ between weeks since recipes differ
 
 QUALITY STANDARDS:
 - Practical, beginner-friendly recipes
 - Variety in proteins, vegetables, and cooking methods
 - Ensure strict keto compliance: ALL 30 days must have <30g net carbs
-- Include motivational keto tips and hydration reminders in recipe notes
 """
 
     # Create agent with structured output

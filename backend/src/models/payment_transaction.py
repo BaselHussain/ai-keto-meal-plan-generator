@@ -43,9 +43,11 @@ from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import String, DateTime, Index, DECIMAL, ForeignKey
+from sqlalchemy.types import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.lib.database import Base
+from .payment_status import PaymentStatus
 
 if TYPE_CHECKING:
     from src.models.meal_plan import MealPlan
@@ -141,10 +143,10 @@ class PaymentTransaction(Base):
         doc="Payment method type (card, apple_pay, google_pay, ideal, alipay, bank_transfer)"
     )
 
-    payment_status: Mapped[str] = mapped_column(
-        String(50),
+    payment_status: Mapped[PaymentStatus] = mapped_column(
+        SQLEnum(PaymentStatus, name="payment_status_enum"),
         nullable=False,
-        default="succeeded",
+        default=PaymentStatus.SUCCEEDED,
         doc="Transaction status (succeeded, refunded, chargeback)"
     )
 

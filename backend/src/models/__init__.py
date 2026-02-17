@@ -34,6 +34,9 @@ from src.models.payment_transaction import PaymentTransaction
 from src.models.manual_resolution import ManualResolution
 from src.models.magic_link import MagicLinkToken
 from src.models.email_blacklist import EmailBlacklist
+from src.models.payment_status import PaymentStatus
+from src.models.issue_type import IssueType
+from src.models.refund_count import RefundCount
 
 __all__ = [
     "User",
@@ -43,4 +46,7 @@ __all__ = [
     "ManualResolution",
     "MagicLinkToken",
     "EmailBlacklist",
+    "PaymentStatus",
+    "IssueType",
+    "RefundCount",
 ]
