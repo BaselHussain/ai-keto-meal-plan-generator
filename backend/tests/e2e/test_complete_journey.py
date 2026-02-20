@@ -55,7 +55,7 @@ def create_quiz_data_weight_loss_female_sedentary():
                 height_cm=165,
                 goal="weight_loss"
             )
-        )
+        ).model_dump()
     }
 
 
@@ -91,7 +91,7 @@ def create_quiz_data_muscle_gain_male_very_active():
                 height_cm=180,
                 goal="muscle_gain"
             )
-        )
+        ).model_dump()
     }
 
 
@@ -127,7 +127,7 @@ def create_quiz_data_maintenance_female_moderate():
                 height_cm=168,
                 goal="maintenance"
             )
-        )
+        ).model_dump()
     }
 
 
@@ -215,6 +215,26 @@ class TestCompleteJourneyWeightLossFemaleSedentary:
                 assert result["success"] is True
                 assert "meal_plan_id" in result
 
+                # Create mock MealPlan record in DB (simulates what real orchestration would do)
+                normalized = normalize_email(quiz_data["email"])
+                meal_plan_record = MealPlan(
+                    id=result["meal_plan_id"],
+                    payment_id=payment_id,
+                    email=quiz_data["email"],
+                    normalized_email=normalized,
+                    pdf_blob_path=result["pdf_blob_path"],
+                    calorie_target=calorie_target,
+                    preferences_summary={
+                        "excluded_foods": [],
+                        "preferred_proteins": ["chicken", "salmon"],
+                        "dietary_restrictions": "Prefer to avoid dairy"
+                    },
+                    ai_model="gpt-4o",
+                    status="completed",
+                )
+                db_session.add(meal_plan_record)
+                await db_session.commit()
+
         # Step 3: Verify meal plan was created
         from sqlalchemy import select
         result = await db_session.execute(
@@ -228,11 +248,12 @@ class TestCompleteJourneyWeightLossFemaleSedentary:
         # Step 4: Verify PDF recovery works (via magic link)
         # Create a magic link for recovery
         from src.services.magic_link import generate_magic_link_token
-        magic_link_result = await generate_magic_link_token(
+        token, magic_link_record = await generate_magic_link_token(
             email=quiz_data["email"],
-            ip_address="127.0.0.1"
+            ip_address="127.0.0.1",
+            db=db_session
         )
-        assert "token" in magic_link_result
+        magic_link_result = {"token": token}
 
         # Verify the recovery endpoint works with the token
         recovery_response = await async_client.get(

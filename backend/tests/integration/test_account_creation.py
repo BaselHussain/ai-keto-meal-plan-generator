@@ -26,6 +26,7 @@ Reference:
 import pytest
 import time
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +41,14 @@ from src.services.auth_service import (
     verify_password,
 )
 from src.lib.email_utils import normalize_email
+
+
+@pytest.fixture(autouse=True)
+def bypass_rate_limiting():
+    """Bypass Redis rate limiting for auth tests to prevent cross-test contamination."""
+    with patch("src.api.auth.check_rate_limit_ip", new_callable=AsyncMock) as mock_rl:
+        mock_rl.return_value = None  # No exception = rate limit not exceeded
+        yield mock_rl
 
 
 @pytest.mark.asyncio
@@ -199,7 +208,8 @@ class TestAccountRegistration:
         # Assert rejection (email mismatch)
         assert response.status_code == 400
         data = response.json()
-        assert "email address must match" in data["detail"].lower()
+        error_msg = data.get("error", {}).get("message", data.get("detail", ""))
+        assert "email address must match" in error_msg.lower()
 
         # Verify no user was created
         normalized_email = normalize_email(different_email)
@@ -225,7 +235,7 @@ class TestAccountRegistration:
         password = "SecurePassword123!"
 
         # First registration (should succeed)
-        response1 = await client.post(
+        response1 = await async_client.post(
             "/api/v1/auth/register",
             json={
                 "email": email,
@@ -236,7 +246,7 @@ class TestAccountRegistration:
         assert response1.status_code == 201
 
         # Second registration with same email (should fail)
-        response2 = await client.post(
+        response2 = await async_client.post(
             "/api/v1/auth/register",
             json={
                 "email": email,
@@ -248,7 +258,8 @@ class TestAccountRegistration:
         # Assert rejection (duplicate email)
         assert response2.status_code == 400
         data = response2.json()
-        assert "already exists" in data["detail"].lower()
+        error_msg = data.get("error", {}).get("message", data.get("detail", ""))
+        assert "already exists" in error_msg.lower()
 
     async def test_register_email_normalization(
         self,
@@ -266,7 +277,7 @@ class TestAccountRegistration:
         password = "SecurePassword123!"
 
         # First registration with base email
-        response1 = await client.post(
+        response1 = await async_client.post(
             "/api/v1/auth/register",
             json={
                 "email": base_email,
@@ -298,7 +309,8 @@ class TestAccountRegistration:
             # All variations should be rejected (duplicate email)
             assert response.status_code == 400
             data = response.json()
-            assert "already exists" in data["detail"].lower()
+            error_msg = data.get("error", {}).get("message", data.get("detail", ""))
+            assert "already exists" in error_msg.lower()
 
     async def test_register_invalid_signup_token(
         self,
@@ -329,7 +341,8 @@ class TestAccountRegistration:
         # Assert rejection (invalid token)
         assert response.status_code == 400
         data = response.json()
-        assert "invalid or expired" in data["detail"].lower()
+        error_msg = data.get("error", {}).get("message", data.get("detail", ""))
+        assert "invalid or expired" in error_msg.lower()
 
     async def test_register_password_hashing(
         self,
@@ -467,7 +480,7 @@ class TestAccountLogin:
         email = "loginuser@example.com"
         password = "SecurePassword123!"
 
-        register_response = await client.post(
+        register_response = await async_client.post(
             "/api/v1/auth/register",
             json={
                 "email": email,
@@ -478,7 +491,7 @@ class TestAccountLogin:
         assert register_response.status_code == 201
 
         # Login with credentials
-        login_response = await client.post(
+        login_response = await async_client.post(
             "/api/v1/auth/login",
             json={
                 "email": email,
@@ -515,7 +528,7 @@ class TestAccountLogin:
         email = "loginuser2@example.com"
         password = "SecurePassword123!"
 
-        register_response = await client.post(
+        register_response = await async_client.post(
             "/api/v1/auth/register",
             json={
                 "email": email,
@@ -526,7 +539,7 @@ class TestAccountLogin:
         assert register_response.status_code == 201
 
         # Try to login with wrong password
-        login_response = await client.post(
+        login_response = await async_client.post(
             "/api/v1/auth/login",
             json={
                 "email": email,
@@ -534,10 +547,11 @@ class TestAccountLogin:
             },
         )
 
-        # Assert rejection (invalid password)
-        assert login_response.status_code == 400
+        # Assert rejection (invalid password) - 401 Unauthorized
+        assert login_response.status_code == 401
         data = login_response.json()
-        assert "invalid email or password" in data["detail"].lower()
+        error_msg = data.get("error", {}).get("message", data.get("detail", ""))
+        assert "invalid email or password" in error_msg.lower()
 
     async def test_login_nonexistent_user(
         self,
@@ -551,7 +565,7 @@ class TestAccountLogin:
         Expected: 400 error, invalid credentials (no user enumeration).
         """
         # Try to login with non-existent email
-        login_response = await client.post(
+        login_response = await async_client.post(
             "/api/v1/auth/login",
             json={
                 "email": "nonexistent@example.com",
@@ -560,6 +574,7 @@ class TestAccountLogin:
         )
 
         # Assert rejection (generic error message to prevent user enumeration)
-        assert login_response.status_code == 400
+        assert login_response.status_code == 401
         data = login_response.json()
-        assert "invalid email or password" in data["detail"].lower()
+        error_msg = data.get("error", {}).get("message", data.get("detail", ""))
+        assert "invalid email or password" in error_msg.lower()

@@ -37,6 +37,7 @@ from src.schemas.meal_plan import (
     WeeklyShoppingList,
     Ingredient,
     PreferencesSummary,
+    KetoTip,
 )
 
 
@@ -197,6 +198,13 @@ def create_mock_meal_plan() -> MealPlanStructure:
                 ],
             ),
         ],
+        keto_tips=[
+            KetoTip(title="Stay Hydrated", description="Drink at least 8 glasses of water daily on keto."),
+            KetoTip(title="Electrolytes", description="Supplement sodium, potassium, and magnesium daily."),
+            KetoTip(title="Fat is Fuel", description="Don't fear healthy fats — they are your primary energy source."),
+            KetoTip(title="Read Labels", description="Check every label for hidden carbs and sugars."),
+            KetoTip(title="Meal Prep", description="Prepare meals in advance to stay on track during busy days."),
+        ],
     )
 
 
@@ -292,7 +300,7 @@ class TestFullPipelineWeightLoss:
             }
 
         # Mock PDF generation
-        async def mock_generate_pdf(meal_plan, calorie_target, user_email):
+        async def mock_generate_pdf(meal_plan, calorie_target, user_email, preferences=None):
             steps_executed.append("pdf_generation")
             await asyncio.sleep(0.05)
             # Return valid PDF bytes
@@ -400,7 +408,7 @@ class TestFullPipelineMuscleGain:
                 "generation_time_ms": 6000,
             }
 
-        async def mock_generate_pdf(meal_plan, calorie_target, user_email):
+        async def mock_generate_pdf(meal_plan, calorie_target, user_email, preferences=None):
             steps_executed.append("pdf_generation")
             assert calorie_target == 2800
             return b'%PDF-1.4\nMock PDF Content for Muscle Gain\n%%EOF'
@@ -501,7 +509,7 @@ class TestFullPipelineMaintenance:
                 "generation_time_ms": 4500,
             }
 
-        async def mock_generate_pdf(meal_plan, calorie_target, user_email):
+        async def mock_generate_pdf(meal_plan, calorie_target, user_email, preferences=None):
             start = time.time()
             steps_executed.append("pdf_generation")
             await asyncio.sleep(0.05)
@@ -599,7 +607,7 @@ class TestPipelinePerformance:
                 "generation_time_ms": 500,
             }
 
-        async def mock_generate_pdf(meal_plan, calorie_target, user_email):
+        async def mock_generate_pdf(meal_plan, calorie_target, user_email, preferences=None):
             await asyncio.sleep(0.2)  # Simulate PDF generation
             return b'%PDF-1.4\nContent\n%%EOF'
 
