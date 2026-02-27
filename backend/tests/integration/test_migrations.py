@@ -133,7 +133,7 @@ def alembic_config() -> Config:
     config = Config(str(alembic_ini_path))
 
     # Override database URL with test database URL
-    test_db_url = os.getenv("TEST_DATABASE_URL")
+    test_db_url = os.getenv("TEST_DATABASE_URL") or os.getenv("NEON_DATABASE_URL")
     if test_db_url:
         # Convert to asyncpg-compatible format
         test_db_url = convert_url_for_asyncpg(test_db_url)
@@ -150,7 +150,7 @@ async def migration_engine() -> AsyncEngine:
     Uses NullPool to avoid connection pooling issues during migration testing.
     Each test gets a fresh engine with clean schema.
     """
-    test_db_url = os.getenv("TEST_DATABASE_URL")
+    test_db_url = os.getenv("TEST_DATABASE_URL") or os.getenv("NEON_DATABASE_URL")
 
     if not test_db_url:
         pytest.skip("TEST_DATABASE_URL not set - PostgreSQL required for migration tests")

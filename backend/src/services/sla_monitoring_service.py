@@ -144,7 +144,7 @@ async def process_sla_violation(entry: ManualResolution) -> bool:
             refund_data = {
                 "payment_id": entry.payment_id,
                 "amount": payment_transaction.amount,
-                "reason": f"SLA missed - {entry.issue_type}: {entry.description[:100]}..." if entry.description else f"SLA missed - {entry.issue_type}",
+                "reason": f"SLA missed - {entry.issue_type}: {entry.resolution_notes[:100]}..." if entry.resolution_notes else f"SLA missed - {entry.issue_type}",
                 "email": entry.user_email
             }
 

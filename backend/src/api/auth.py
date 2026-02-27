@@ -285,6 +285,9 @@ async def register(
             f"signup_token: {bool(request_data.signup_token)})"
         )
 
+    except HTTPException:
+        # Re-raise HTTPExceptions (e.g. duplicate email check above)
+        raise
     except IntegrityError as e:
         # Database constraint violation (e.g., duplicate email race condition)
         await db.rollback()

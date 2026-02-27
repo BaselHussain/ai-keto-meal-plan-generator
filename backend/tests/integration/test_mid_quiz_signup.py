@@ -140,7 +140,9 @@ async def test_load_progress_no_saved_data(async_client: AsyncClient):
         headers={"Authorization": f"Bearer {fresh_jwt}"},
     )
     assert response.status_code == 404
-    assert "No saved quiz progress" in response.json()["detail"]
+    # The app uses custom error format: {"error": {"code": ..., "message": ...}}
+    error_body = response.json()
+    assert "No saved quiz progress" in error_body["error"]["message"]
 
 
 @pytest.mark.asyncio

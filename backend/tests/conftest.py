@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import AsyncGenerator
 import pytest
 import pytest_asyncio
-from sqlalchemy import text
+from sqlalchemy import text, JSON
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, StaticPool
 from httpx import AsyncClient, ASGITransport
 
 # Add src directory to Python path for imports
@@ -22,68 +22,119 @@ backend_dir = Path(__file__).parent.parent
 src_dir = backend_dir / "src"
 sys.path.insert(0, str(src_dir))
 
-# Import Base after path is set
+# Load .env so TEST_DATABASE_URL / NEON_DATABASE_URL are available to migration tests
+try:
+    from dotenv import load_dotenv
+    load_dotenv(backend_dir / ".env")
+except ImportError:
+    pass
+
+# ---------------------------------------------------------------------------
+# SQLite / JSONB compatibility shim
+# ---------------------------------------------------------------------------
+# PostgreSQL's JSONB type is not supported by SQLite.  When no
+# TEST_DATABASE_URL is set we fall back to an in-memory SQLite DB, so we
+# patch the SQLite type compiler to render JSONB columns as plain JSON.
+# This must happen before any SQLAlchemy models are imported.
+if not os.getenv("TEST_DATABASE_URL"):
+    try:
+        from sqlalchemy.dialects.postgresql import JSONB
+        from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
+
+        if not hasattr(SQLiteTypeCompiler, "visit_JSONB"):
+            def _visit_JSONB(self, type_, **kw):  # type: ignore[override]
+                return self.visit_JSON(JSON(), **kw)
+
+            SQLiteTypeCompiler.visit_JSONB = _visit_JSONB  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+# Import Base after the compatibility shim is in place
 from src.lib.database import Base
 
 
-# Event loop fixture for async tests
+# ---------------------------------------------------------------------------
+# Event loop
+# ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
 def event_loop():
-    """Create event loop for async tests."""
+    """Create a single event loop for the whole test session."""
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
 
 
-# Test database URL fixture
+# ---------------------------------------------------------------------------
+# Database URL
+# ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
 def test_database_url() -> str:
     """
-    Get test database URL from environment or create in-memory SQLite database.
+    Return the database URL for the test session.
 
-    For integration tests, use a separate test database to avoid polluting production data.
-    Options:
-    1. Set TEST_DATABASE_URL environment variable
-    2. Fallback to SQLite in-memory database (for unit tests)
+    Priority:
+    1. TEST_DATABASE_URL env var  →  async PostgreSQL URL
+    2. Fallback                   →  shared in-memory SQLite URL
+
+    Note: The SQLite fallback uses a named in-memory file so that all
+    aiosqlite connections within the same process share the same database
+    (``mode=memory&cache=shared`` + ``StaticPool``).  Plain
+    ``sqlite+aiosqlite:///:memory:`` would give each connection a separate
+    empty database, causing "no such table" errors.
     """
     test_db_url = os.getenv("TEST_DATABASE_URL")
 
     if test_db_url:
-        # Use PostgreSQL test database if provided
         if test_db_url.startswith("postgresql://"):
             test_db_url = test_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
         elif not test_db_url.startswith("postgresql+asyncpg://"):
             test_db_url = f"postgresql+asyncpg://{test_db_url}"
         return test_db_url
-    else:
-        # Fallback to SQLite in-memory database for local testing
-        # Note: SQLite has limitations (no JSONB support), so PostgreSQL is recommended
-        return "sqlite+aiosqlite:///:memory:"
+
+    # Shared in-memory SQLite – all connections see the same database.
+    return "sqlite+aiosqlite:///file:test_keto?mode=memory&cache=shared&uri=true"
 
 
-# Test database engine fixture
+# ---------------------------------------------------------------------------
+# Engine
+# ---------------------------------------------------------------------------
 @pytest_asyncio.fixture(scope="session")
 async def test_engine(test_database_url: str) -> AsyncGenerator[AsyncEngine, None]:
     """
-    Create test database engine with NullPool (no connection pooling).
+    Create the SQLAlchemy async engine for the test session.
 
-    Uses NullPool to create fresh connections for each test, preventing
-    connection state leakage between tests.
+    For SQLite we use StaticPool so that every connection (including those
+    created by aiosqlite internally) reuses the same in-memory database that
+    was populated by ``Base.metadata.create_all``.
+
+    For PostgreSQL we use NullPool so that there are no persistent connections
+    between tests.
     """
-    engine = create_async_engine(
-        test_database_url,
-        poolclass=NullPool,
-        echo=False,  # Set to True for SQL query debugging
-        future=True,
-    )
+    is_sqlite = test_database_url.startswith("sqlite")
 
-    # Create all tables in test database
+    if is_sqlite:
+        engine = create_async_engine(
+            test_database_url,
+            poolclass=StaticPool,
+            connect_args={"check_same_thread": False},
+            echo=False,
+            future=True,
+        )
+    else:
+        engine = create_async_engine(
+            test_database_url,
+            poolclass=NullPool,
+            echo=False,
+            future=True,
+        )
+
+    # Create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
 
-    # Drop all tables and dispose engine after tests
+    # Tear down
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
@@ -185,13 +236,16 @@ async def sample_meal_plan(db_session: AsyncSession):
     Create a sample meal plan for testing.
 
     Returns a completed meal plan with PDF available.
+    Uses a unique payment_id per test invocation to avoid UNIQUE constraint
+    violations when the shared in-memory SQLite database is used.
     """
+    import uuid
     from datetime import datetime, timedelta
     from src.models.meal_plan import MealPlan
     from src.lib.email_utils import normalize_email
 
     meal_plan = MealPlan(
-        payment_id="pay_test_123",
+        payment_id=f"pay_test_{uuid.uuid4().hex[:12]}",
         email="test@example.com",
         normalized_email=normalize_email("test@example.com"),
         pdf_blob_path="https://blob.vercel-storage.com/test-meal-plan.pdf",

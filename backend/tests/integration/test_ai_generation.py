@@ -32,6 +32,7 @@ from src.schemas.meal_plan import (
     Meal,
     WeeklyShoppingList,
     Ingredient,
+    KetoTip,
     PreferencesSummary,
 )
 
@@ -117,6 +118,28 @@ def create_valid_meal_plan(carbs_per_meal: int = 5, num_days: int = 30) -> MealP
                 week=4,
                 proteins=[Ingredient(name="chicken", quantity="2 lbs"), Ingredient(name="turkey", quantity="1 lb")],
                 vegetables=[Ingredient(name="cauliflower", quantity="1 head"), Ingredient(name="peppers", quantity="3")],
+            ),
+        ],
+        keto_tips=[
+            KetoTip(
+                title="Stay Hydrated",
+                description="Drink at least 8 glasses of water daily. Keto increases water loss through reduced glycogen stores.",
+            ),
+            KetoTip(
+                title="Replenish Electrolytes",
+                description="Add sodium, potassium, and magnesium to avoid the keto flu. Use salt liberally and eat magnesium-rich foods.",
+            ),
+            KetoTip(
+                title="Track Net Carbs",
+                description="Net carbs = total carbs minus fiber. Focus on net carbs to stay in ketosis, targeting under 30g per day.",
+            ),
+            KetoTip(
+                title="Expect Fat Adaptation",
+                description="It takes 2-6 weeks to become fully fat-adapted. Energy may dip initially before improving significantly.",
+            ),
+            KetoTip(
+                title="Avoid Hidden Carbs",
+                description="Read labels carefully. Sauces, dressings, and processed foods often contain hidden sugars and carbs.",
             ),
         ],
     )

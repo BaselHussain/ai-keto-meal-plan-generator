@@ -55,12 +55,16 @@ async def test_magic_link_verification_success(test_session):
 
     Verifies that a valid token returns meal plan details and marks token as used.
     """
-    # Setup: Create meal plan
-    email = "test@example.com"
+    # Use a unique email to avoid collision with other tests that use test@example.com.
+    # The shared in-memory SQLite DB accumulates committed records across tests,
+    # so verify_magic_link_token would return multiple meal plans for a shared email.
+    import uuid
+    unique_suffix = uuid.uuid4().hex[:8]
+    email = f"verify_success_{unique_suffix}@example.com"
     normalized_email = normalize_email(email)
 
     meal_plan = MealPlan(
-        payment_id="txn_test_verification_001",
+        payment_id=f"txn_test_verification_{unique_suffix}",
         email=email,
         normalized_email=normalized_email,
         pdf_blob_path="meal-plans/test_verification_001.pdf",

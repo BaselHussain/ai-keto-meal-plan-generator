@@ -86,11 +86,18 @@ async def test_request_magic_link_nonexistent_email(async_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_ip_rate_limit_blocks_6th_request(async_client: AsyncClient):
     """T107E-3: 6th request from same IP in 1h blocked."""
+    from src.lib.rate_limiting import RateLimitExceeded
+
     with patch("src.api.recovery.check_rate_limit_email", new_callable=AsyncMock) as mock_email_rl, \
          patch("src.api.recovery.check_rate_limit_ip", new_callable=AsyncMock) as mock_ip_rl:
 
-        mock_email_rl.return_value = {"allowed": True, "remaining": 2}
-        mock_ip_rl.return_value = {"allowed": False, "remaining": 0, "retry_after": 3600}
+        # Email rate limit passes; IP rate limit raises RateLimitExceeded
+        mock_email_rl.return_value = None
+        mock_ip_rl.side_effect = RateLimitExceeded(
+            "Too many magic link requests from your IP. Please try again later.",
+            limit=5,
+            current_count=6,
+        )
 
         response = await async_client.post(
             "/api/v1/recovery/request-magic-link",

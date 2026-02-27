@@ -17,7 +17,6 @@ async def test_sla_deadline_calculation(test_session: AsyncSession):
     user = User(
         email="sla-test@example.com",
         normalized_email="slatesexamplecom",
-        email_verified=True
     )
     test_session.add(user)
     await test_session.commit()
@@ -37,11 +36,12 @@ async def test_sla_deadline_calculation(test_session: AsyncSession):
     test_session.add(queue_entry)
     await test_session.commit()
 
-    # Calculate expected SLA deadline (4 hours from creation per schema)
-    expected_deadline = queue_entry.created_at + timedelta(hours=4)
-
-    # Verify SLA deadline is properly set (per schema is 4 hours, not 48)
-    assert queue_entry.sla_deadline == expected_deadline
+    # Verify SLA deadline is approximately 4 hours from now (within a 5-second window to
+    # account for the microsecond gap between when `created_at` and `sla_deadline` were set).
+    now = datetime.utcnow()
+    expected_lower = now + timedelta(hours=4) - timedelta(seconds=5)
+    expected_upper = now + timedelta(hours=4) + timedelta(seconds=5)
+    assert expected_lower <= queue_entry.sla_deadline <= expected_upper
 
 
 @pytest.mark.asyncio
@@ -51,7 +51,6 @@ async def test_sla_breach_detection(test_session: AsyncSession):
     user = User(
         email="breach@example.com",
         normalized_email="breachexamplecom",
-        email_verified=True
     )
     test_session.add(user)
     await test_session.commit()
@@ -101,208 +100,204 @@ async def test_sla_breach_detection(test_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_sla_monitoring_scheduled_job(test_session: AsyncSession):
-    """Test the manual resolution queue SLA monitoring job execution"""
-    # Create multiple test users
-    users_data = [
-        {"email": "timely@example.com", "normalized_email": "timelyexamplecom"},
-        {"email": "breach1@example.com", "normalized_email": "breach1examplecom"},
-        {"email": "breach2@example.com", "normalized_email": "breach2examplecom"},
-    ]
+    """Test the SLA monitoring job detects breached entries and calls process_sla_violation."""
+    from contextlib import asynccontextmanager
+    from src.services.sla_monitoring_service import run_sla_monitoring
 
-    users = []
-    for user_data in users_data:
-        user = User(email=user_data["email"], normalized_email=user_data["normalized_email"], email_verified=True)
-        test_session.add(user)
-        users.append(user)
-    await test_session.commit()
-
-    # Create queue entries: 1 recent (no breach), 2 old (should breach)
     current_time = datetime.utcnow()
 
-    # Recent entry (should not breach - 2 hours old, deadline in 2 more hours)
-    recent_time = current_time - timedelta(hours=2)
+    # Create 2 breached entries (deadline already passed) and 1 OK entry
     recent_entry = ManualResolution(
-        id="recent-uuid-1",
-        payment_id="test_payment_recent",
-        user_email=users[0].email,
-        normalized_email=users[0].normalized_email,
+        id=str(uuid.uuid4()),
+        payment_id="sched_payment_recent",
+        user_email="sched_recent@example.com",
+        normalized_email="schedrecentexamplecom",
         issue_type="manual_refund_required",
-        status="PENDING",
-        sla_deadline=recent_time + timedelta(hours=4),  # Deadline not due yet
+        status="pending",
+        sla_deadline=current_time + timedelta(hours=4),  # Not breached
         resolution_notes="Recent case",
-        created_at=recent_time
+        created_at=current_time - timedelta(hours=2),
     )
-    test_session.add(recent_entry)
-
-    # Old entries (should breach - more than 4 hours old)
-    old_time_1 = current_time - timedelta(hours=5)
     old_entry_1 = ManualResolution(
-        id="old-uuid-1",
-        payment_id="test_payment_old_1",
-        user_email=users[1].email,
-        normalized_email=users[1].normalized_email,
+        id=str(uuid.uuid4()),
+        payment_id="sched_payment_old_1",
+        user_email="sched_breach1@example.com",
+        normalized_email="schedbreach1examplecom",
         issue_type="manual_refund_required",
-        status="PENDING",
-        sla_deadline=old_time_1,  # Deadline already passed
-        resolution_notes="Failed payment case",
-        created_at=old_time_1
+        status="pending",
+        sla_deadline=current_time - timedelta(hours=1),  # Breached
+        resolution_notes="Old case 1",
+        created_at=current_time - timedelta(hours=5),
     )
-    test_session.add(old_entry_1)
-
-    old_time_2 = current_time - timedelta(hours=6)
     old_entry_2 = ManualResolution(
-        id="old-uuid-2",
-        payment_id="test_payment_old_2",
-        user_email=users[2].email,
-        normalized_email=users[2].normalized_email,
+        id=str(uuid.uuid4()),
+        payment_id="sched_payment_old_2",
+        user_email="sched_breach2@example.com",
+        normalized_email="schedbreach2examplecom",
         issue_type="manual_refund_required",
-        status="PENDING",
-        sla_deadline=old_time_2,  # Deadline already passed
-        resolution_notes="Refund issue case",
-        created_at=old_time_2
+        status="pending",
+        sla_deadline=current_time - timedelta(hours=2),  # Breached
+        resolution_notes="Old case 2",
+        created_at=current_time - timedelta(hours=6),
     )
-    test_session.add(old_entry_2)
-
+    test_session.add_all([recent_entry, old_entry_1, old_entry_2])
     await test_session.commit()
 
-    # Run the SLA monitoring job simulation
-    with patch('sentry_sdk.capture_message') as mock_sentry, \
-         patch('src.services.email_service.send_sla_breach_alert') as mock_email:
+    # Patch get_db to inject the test session so run_sla_monitoring uses it
+    @asynccontextmanager
+    async def mock_get_db():
+        yield test_session
 
-        # Simulate the SLA monitoring job
-        breached_tickets = await get_sla_breached_tickets(test_session)
+    with patch("src.services.sla_monitoring_service.get_db", return_value=mock_get_db()), \
+         patch("src.services.sla_monitoring_service.process_sla_violation", new_callable=AsyncMock, return_value=True) as mock_process, \
+         patch("sentry_sdk.capture_message"):
 
-        # Should find 2 breached tickets
-        assert len(breached_tickets) == 2
-        assert any(ticket.normalized_email == "breach1examplecom" for ticket in breached_tickets)
-        assert any(ticket.normalized_email == "breach2examplecom" for ticket in breached_tickets)
+        result = await run_sla_monitoring()
 
-        # Verify Sentry alerts were sent
-        assert mock_sentry.call_count >= 1
-
-        # Verify email notifications were sent
-        assert mock_email.call_count >= 1
+    # Should have processed 2 breached tickets, not the recent one
+    assert result["checked_entries"] == 2
+    assert result["refunds_processed"] == 2
+    assert mock_process.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_paddle_refund_api_with_mock():
-    """Test auto-refund processing with mocked Paddle API call"""
-    db_session = await get_db_session()
+async def test_paddle_refund_api_with_mock(test_session: AsyncSession):
+    """Test process_sla_violation triggers Paddle refund via PaddleClient."""
+    from contextlib import asynccontextmanager
+    from src.services.sla_monitoring_service import process_sla_violation
+    from src.models.payment_status import PaymentStatus
 
-    # Create test user
-    user = User(
-        email="refund@example.com",
-        normalized_email="refundexamplecom",
-        email_verified=True
-    )
-    db_session.add(user)
-    await db_session.commit()
-
-    # Create payment transaction
+    # Create payment transaction matching current schema
     payment = PaymentTransaction(
-        user_id=user.id,
-        paddle_subscription_id="sub_slarefund",
-        paddle_plan_id="plan_autorefund",
-        amount=29.99,
+        id=str(uuid.uuid4()),
+        payment_id="paddle_refund_test_pay_001",
+        amount=47.95,
         currency="USD",
-        status="active",
-        recurring=True,
-        created_at=datetime.utcnow(),
-        next_bill_date=datetime.utcnow() + timedelta(days=30)
+        payment_method="card",
+        payment_status=PaymentStatus.SUCCEEDED,
+        paddle_created_at=datetime.utcnow(),
+        webhook_received_at=datetime.utcnow(),
+        customer_email="paddle_refund_test@example.com",
+        normalized_email="paddlerefundtestexamplecom",
     )
-    db_session.add(payment)
-    await db_session.commit()
+    test_session.add(payment)
+    await test_session.flush()
 
-    # Mock Paddle API refund call
-    with patch('src.services.paddle_service.PaddleService.refund_subscription', return_value=True) as mock_paddle_refund, \
-         patch('sentry_sdk.capture_message') as mock_sentry:
+    # Create breached ManualResolution entry
+    entry = ManualResolution(
+        id=str(uuid.uuid4()),
+        payment_id=payment.payment_id,
+        user_email=payment.customer_email,
+        normalized_email=payment.normalized_email,
+        issue_type="manual_refund_required",
+        status="pending",
+        sla_deadline=datetime.utcnow() - timedelta(hours=1),
+        resolution_notes="SLA breached",
+        created_at=datetime.utcnow() - timedelta(hours=5),
+    )
+    test_session.add(entry)
+    await test_session.commit()
 
-        # Process auto-refund
-        refund_result = await process_paddle_auto_refund(payment.paddle_subscription_id)
+    @asynccontextmanager
+    async def mock_get_db():
+        yield test_session
 
-        # Verify Paddle refund was called
-        mock_paddle_refund.assert_called_once_with(payment.paddle_subscription_id)
+    with patch("src.services.sla_monitoring_service.get_db", return_value=mock_get_db()), \
+         patch("src.services.sla_monitoring_service.update_manual_resolution_status", new_callable=AsyncMock, return_value=True), \
+         patch("src.services.sla_monitoring_service.PaddleClient") as MockPaddleClient, \
+         patch("src.services.sla_monitoring_service.send_sla_missed_refund_email", new_callable=AsyncMock), \
+         patch("sentry_sdk.capture_message"):
 
-        # Verify refund was processed successfully
-        assert refund_result is True
+        mock_client = AsyncMock()
+        mock_client.process_sla_refund.return_value = True
+        MockPaddleClient.return_value = mock_client
 
-        # Verify Sentry was notified of auto-refund
-        mock_sentry.assert_called_with(f"Auto-refund processed for subscription {payment.paddle_subscription_id}",
-                                      level="info")
+        result = await process_sla_violation(entry)
+
+    assert result is True
+    mock_client.process_sla_refund.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_manual_resolution_vs_auto_refund_routing(test_session: AsyncSession):
-    """Test proper routing between auto-refund and manual_resolution queue"""
-    # Create test user
-    user = User(
-        email="routing@example.com",
-        normalized_email="routingexamplecom",
-        email_verified=True
+    """Test process_sla_violation handles card (auto-refund) vs missing payment (manual)."""
+    from contextlib import asynccontextmanager
+    from src.services.sla_monitoring_service import process_sla_violation
+    from src.models.payment_status import PaymentStatus
+
+    @asynccontextmanager
+    async def mock_get_db():
+        yield test_session
+
+    # --- Scenario 1: card payment → auto-refund succeeds ---
+    card_payment = PaymentTransaction(
+        id=str(uuid.uuid4()),
+        payment_id="routing_card_pay_001",
+        amount=47.95,
+        currency="USD",
+        payment_method="card",
+        payment_status=PaymentStatus.SUCCEEDED,
+        paddle_created_at=datetime.utcnow(),
+        webhook_received_at=datetime.utcnow(),
+        customer_email="routing_card@example.com",
+        normalized_email="routingcardexamplecom",
     )
-    test_session.add(user)
+    test_session.add(card_payment)
+    await test_session.flush()
+
+    card_entry = ManualResolution(
+        id=str(uuid.uuid4()),
+        payment_id=card_payment.payment_id,
+        user_email=card_payment.customer_email,
+        normalized_email=card_payment.normalized_email,
+        issue_type="manual_refund_required",
+        status="pending",
+        sla_deadline=datetime.utcnow() - timedelta(hours=1),
+        resolution_notes="Card refund",
+        created_at=datetime.utcnow() - timedelta(hours=5),
+    )
+    test_session.add(card_entry)
     await test_session.commit()
 
-    # Payment that CAN be auto-refunded (supported payment method)
-    auto_refund_payment = PaymentTransaction(
-        user_id=user.id,
-        paddle_subscription_id="sub_auto",
-        paddle_plan_id="plan_test",
-        amount=29.99,
-        currency="USD",
-        status="active",
-        created_at=datetime.utcnow(),
-        payment_method="card"  # Card payments can be auto-refunded
-    )
-    test_session.add(auto_refund_payment)
+    with patch("src.services.sla_monitoring_service.get_db", return_value=mock_get_db()), \
+         patch("src.services.sla_monitoring_service.update_manual_resolution_status", new_callable=AsyncMock, return_value=True), \
+         patch("src.services.sla_monitoring_service.PaddleClient") as MockPaddleClient, \
+         patch("src.services.sla_monitoring_service.send_sla_missed_refund_email", new_callable=AsyncMock), \
+         patch("sentry_sdk.capture_message"):
 
-    # Payment that cannot be auto-refunded (needs manual review)
-    manual_payment = PaymentTransaction(
-        user_id=user.id,
-        paddle_subscription_id="sub_manual",
-        paddle_plan_id="plan_test",
-        amount=29.99,
-        currency="USD",
-        status="active",
-        created_at=datetime.utcnow(),
-        payment_method="paypal"  # PayPal might need manual review
-    )
-    test_session.add(manual_payment)
+        mock_client = AsyncMock()
+        mock_client.process_sla_refund.return_value = True
+        MockPaddleClient.return_value = mock_client
 
+        result = await process_sla_violation(card_entry)
+
+    # Card payment — auto-refund should succeed
+    assert result is True
+    mock_client.process_sla_refund.assert_called_once()
+
+    # --- Scenario 2: missing payment transaction → returns False ---
+    missing_entry = ManualResolution(
+        id=str(uuid.uuid4()),
+        payment_id="routing_nonexistent_pay_999",
+        user_email="routing_missing@example.com",
+        normalized_email="routingmissingexamplecom",
+        issue_type="manual_refund_required",
+        status="pending",
+        sla_deadline=datetime.utcnow() - timedelta(hours=1),
+        resolution_notes="Missing payment",
+        created_at=datetime.utcnow() - timedelta(hours=5),
+    )
+    test_session.add(missing_entry)
     await test_session.commit()
 
-    # Test auto-refund routing
-    with patch('src.services.paddle_service.PaddleService.refund_subscription') as mock_paddle:
-        # Should route to auto-refund because payment method supports it
-        await route_payment_issue(auto_refund_payment, issue_type="REFUND_REQUEST", test_session=test_session)
+    with patch("src.services.sla_monitoring_service.get_db", return_value=mock_get_db()), \
+         patch("src.services.sla_monitoring_service.update_manual_resolution_status", new_callable=AsyncMock, return_value=True), \
+         patch("sentry_sdk.capture_message"):
 
-        # Verify Paddle refund was attempted
-        mock_paddle.assert_called_once_with(auto_refund_payment.paddle_subscription_id)
+        result2 = await process_sla_violation(missing_entry)
 
-    # Test manual resolution routing
-    queue_result_before = await test_session.execute(select(ManualResolution))
-    initial_count = len(queue_result_before.scalars().all())
-
-    await route_payment_issue(manual_payment, issue_type="PAYMENT_FAILED", test_session=test_session)
-
-    # Verify entry was created in manual queue
-    queue_result_after = await test_session.execute(select(ManualResolution))
-    final_count = len(queue_result_after.scalars().all())
-    assert final_count == initial_count + 1
-
-    # Check the manual resolution entry
-    manual_queue_result = await test_session.execute(
-        select(ManualResolution).where(
-            ManualResolution.normalized_email == "routingexamplecom"
-        ).order_by(ManualResolution.created_at.desc())
-    )
-    manual_entry = manual_queue_result.scalars().first()
-    assert manual_entry is not None
-    # Check if the issue is the manual entry has different fields
-    # Since the route_payment_issue function was updated to create proper ManualResolution entries
-    # the entry should have issue_type instead of reason
-    assert manual_entry.issue_type == "manual_refund_required"  # Updated to correct field
-    assert manual_entry.status == "PENDING"
+    # No payment transaction found → cannot auto-refund
+    assert result2 is False
 
 
 @pytest.mark.asyncio

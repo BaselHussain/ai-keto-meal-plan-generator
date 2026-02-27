@@ -24,7 +24,7 @@ from src.models.manual_resolution import IssueType, ManualResolution
 from src.models.meal_plan import MealPlan
 from src.models.payment_transaction import PaymentTransaction, PaymentStatus
 from src.models.quiz_response import QuizResponse
-from src.lib.database import get_db
+from src.lib.database import get_db_context
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ async def process_refund(event_data: Dict[str, Any]) -> None:
     from src.lib.email_utils import normalize_email
     normalized_email = normalize_email(customer_email)
 
-    async with get_db() as session:
+    async with get_db_context() as session:
         try:
             # Find the payment transaction
             result = await session.execute(

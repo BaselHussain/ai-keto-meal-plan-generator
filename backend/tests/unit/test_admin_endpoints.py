@@ -12,20 +12,64 @@ Reference: tasks.md T127H-T127J
 
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from uuid import uuid4
 
 from fastapi import status
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 from src.main import app
 from src.models.manual_resolution import ManualResolution
 
+# The API key used throughout this test module.
+TEST_ADMIN_API_KEY = "test_admin_key_with_sufficient_length_32chars"
+
+
+@pytest.fixture(autouse=True)
+def patch_admin_settings():
+    """
+    Patch the settings object used by admin_auth middleware so that the
+    test API key and a permissive IP whitelist are active for every test
+    in this module.  TestClient uses 'testclient' as the client IP, so we
+    add it to the whitelist.
+    """
+    with patch("src.middleware.admin_auth.settings") as mock_settings:
+        mock_settings.admin_api_key = TEST_ADMIN_API_KEY
+        mock_settings.admin_ips = ["127.0.0.1", "::1", "testclient"]
+        yield mock_settings
+
 
 @pytest.fixture
-def client():
-    """Create a test client."""
+def mock_db():
+    """
+    Provide a mock database session that works with the admin API's synchronous
+    call patterns (``db.execute(...).scalar()``, ``db.execute(...).scalar_one_or_none()``).
+
+    The admin API was written with synchronous SQLAlchemy Session patterns.
+    We use a plain ``MagicMock`` (not ``AsyncMock``) so the returned values
+    from ``execute()`` are regular mocks whose attributes (``.scalar()``,
+    ``.scalar_one_or_none()``, ``.scalars().all()``) are callable without
+    ``await``.
+
+    We override ``get_db`` via ``app.dependency_overrides`` so that FastAPI's
+    dependency injection system injects this mock instead of calling the real
+    database.
+    """
+    from src.lib.database import get_db
+
+    db = MagicMock()
+
+    async def _override_get_db():
+        yield db
+
+    app.dependency_overrides[get_db] = _override_get_db
+    yield db
+    app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture
+def client(mock_db):
+    """Create a test client with the get_db dependency overridden."""
     return TestClient(app)
 
 
@@ -33,7 +77,7 @@ def client():
 def admin_headers():
     """Admin authentication headers."""
     return {
-        "X-API-Key": "test_admin_key_with_sufficient_length_32chars"
+        "X-API-Key": TEST_ADMIN_API_KEY
     }
 
 
@@ -64,34 +108,29 @@ def mock_manual_resolution_entries():
 
 @pytest.mark.asyncio
 async def test_list_manual_resolution_entries_success(
-    client, admin_headers, mock_manual_resolution_entries
+    client, admin_headers, mock_db, mock_manual_resolution_entries
 ):
     """Test successful listing of manual resolution entries."""
-    with patch("src.api.admin.get_db") as mock_get_db:
-        # Mock database session
-        mock_db = Mock(spec=Session)
-        mock_get_db.return_value = mock_db
+    # Mock query results
+    mock_db.execute.return_value.scalars.return_value.all.return_value = (
+        mock_manual_resolution_entries
+    )
+    mock_db.execute.return_value.scalar.return_value = len(mock_manual_resolution_entries)
 
-        # Mock query results
-        mock_db.execute.return_value.scalars.return_value.all.return_value = (
-            mock_manual_resolution_entries
-        )
-        mock_db.execute.return_value.scalar.return_value = len(mock_manual_resolution_entries)
+    response = client.get("/api/v1/admin/manual-resolution", headers=admin_headers)
 
-        response = client.get("/api/v1/admin/manual-resolution", headers=admin_headers)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
 
-        assert response.status_code == status.HTTP_200_OK
-        data = response.json()
+    assert "entries" in data
+    assert "total" in data
+    assert "page" in data
+    assert "page_size" in data
+    assert "total_pages" in data
+    assert "pending_count" in data
+    assert "sla_breached_count" in data
 
-        assert "entries" in data
-        assert "total" in data
-        assert "page" in data
-        assert "page_size" in data
-        assert "total_pages" in data
-        assert "pending_count" in data
-        assert "sla_breached_count" in data
-
-        assert isinstance(data["entries"], list)
+    assert isinstance(data["entries"], list)
 
 
 @pytest.mark.asyncio
@@ -114,91 +153,75 @@ async def test_list_manual_resolution_entries_invalid_api_key(client):
 
 
 @pytest.mark.asyncio
-async def test_list_manual_resolution_entries_with_status_filter(client, admin_headers):
+async def test_list_manual_resolution_entries_with_status_filter(client, admin_headers, mock_db):
     """Test listing with status filter."""
-    with patch("src.api.admin.get_db") as mock_get_db:
-        mock_db = Mock(spec=Session)
-        mock_get_db.return_value = mock_db
+    mock_db.execute.return_value.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value.scalar.return_value = 0
 
-        mock_db.execute.return_value.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value.scalar.return_value = 0
+    response = client.get(
+        "/api/v1/admin/manual-resolution?status_filter=pending",
+        headers=admin_headers
+    )
 
-        response = client.get(
-            "/api/v1/admin/manual-resolution?status_filter=pending",
-            headers=admin_headers
-        )
-
-        assert response.status_code == status.HTTP_200_OK
+    assert response.status_code == status.HTTP_200_OK
 
 
 @pytest.mark.asyncio
-async def test_list_manual_resolution_entries_with_sorting(client, admin_headers):
+async def test_list_manual_resolution_entries_with_sorting(client, admin_headers, mock_db):
     """Test listing with sorting."""
-    with patch("src.api.admin.get_db") as mock_get_db:
-        mock_db = Mock(spec=Session)
-        mock_get_db.return_value = mock_db
+    mock_db.execute.return_value.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value.scalar.return_value = 0
 
-        mock_db.execute.return_value.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value.scalar.return_value = 0
+    response = client.get(
+        "/api/v1/admin/manual-resolution?sort_by=priority&sort_order=asc",
+        headers=admin_headers
+    )
 
-        response = client.get(
-            "/api/v1/admin/manual-resolution?sort_by=priority&sort_order=asc",
-            headers=admin_headers
-        )
-
-        assert response.status_code == status.HTTP_200_OK
+    assert response.status_code == status.HTTP_200_OK
 
 
 @pytest.mark.asyncio
 async def test_resolve_manual_resolution_entry_success(
-    client, admin_headers, mock_manual_resolution_entries
+    client, admin_headers, mock_db, mock_manual_resolution_entries
 ):
     """Test successfully resolving a manual resolution entry."""
     entry = mock_manual_resolution_entries[0]
 
-    with patch("src.api.admin.get_db") as mock_get_db:
-        mock_db = Mock(spec=Session)
-        mock_get_db.return_value = mock_db
+    # Mock query result
+    mock_db.execute.return_value.scalar_one_or_none.return_value = entry
 
-        # Mock query result
-        mock_db.execute.return_value.scalar_one_or_none.return_value = entry
+    response = client.post(
+        f"/api/v1/admin/manual-resolution/{entry.id}/resolve",
+        headers=admin_headers,
+        json={
+            "assigned_to": "admin@ketomealplan.com",
+            "resolution_notes": "Manually regenerated PDF and sent email"
+        }
+    )
 
-        response = client.post(
-            f"/api/v1/admin/manual-resolution/{entry.id}/resolve",
-            headers=admin_headers,
-            json={
-                "assigned_to": "admin@ketomealplan.com",
-                "resolution_notes": "Manually regenerated PDF and sent email"
-            }
-        )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
 
-        assert response.status_code == status.HTTP_200_OK
-        data = response.json()
-
-        assert data["success"] is True
-        assert data["entry_id"] == entry.id
-        assert data["updated_status"] == "resolved"
+    assert data["success"] is True
+    assert data["entry_id"] == entry.id
+    assert data["updated_status"] == "resolved"
 
 
 @pytest.mark.asyncio
-async def test_resolve_manual_resolution_entry_not_found(client, admin_headers):
+async def test_resolve_manual_resolution_entry_not_found(client, admin_headers, mock_db):
     """Test resolving non-existent entry."""
-    with patch("src.api.admin.get_db") as mock_get_db:
-        mock_db = Mock(spec=Session)
-        mock_get_db.return_value = mock_db
+    # Mock not found
+    mock_db.execute.return_value.scalar_one_or_none.return_value = None
 
-        # Mock not found
-        mock_db.execute.return_value.scalar_one_or_none.return_value = None
+    response = client.post(
+        f"/api/v1/admin/manual-resolution/{uuid4()}/resolve",
+        headers=admin_headers,
+        json={
+            "resolution_notes": "Test notes"
+        }
+    )
 
-        response = client.post(
-            f"/api/v1/admin/manual-resolution/{uuid4()}/resolve",
-            headers=admin_headers,
-            json={
-                "resolution_notes": "Test notes"
-            }
-        )
-
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio
@@ -215,85 +238,69 @@ async def test_resolve_manual_resolution_entry_unauthorized(client):
 
 
 @pytest.mark.asyncio
-async def test_regenerate_pdf_success(client, admin_headers, mock_manual_resolution_entries):
+async def test_regenerate_pdf_success(client, admin_headers, mock_db, mock_manual_resolution_entries):
     """Test successfully triggering PDF regeneration."""
     entry = mock_manual_resolution_entries[0]
 
-    with patch("src.api.admin.get_db") as mock_get_db:
-        mock_db = Mock(spec=Session)
-        mock_get_db.return_value = mock_db
+    mock_db.execute.return_value.scalar_one_or_none.return_value = entry
 
-        mock_db.execute.return_value.scalar_one_or_none.return_value = entry
+    response = client.post(
+        f"/api/v1/admin/manual-resolution/{entry.id}/regenerate",
+        headers=admin_headers
+    )
 
-        response = client.post(
-            f"/api/v1/admin/manual-resolution/{entry.id}/regenerate",
-            headers=admin_headers
-        )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
 
-        assert response.status_code == status.HTTP_200_OK
-        data = response.json()
-
-        assert data["success"] is True
-        assert data["entry_id"] == entry.id
-        assert data["updated_status"] == "in_progress"
+    assert data["success"] is True
+    assert data["entry_id"] == entry.id
+    assert data["updated_status"] == "in_progress"
 
 
 @pytest.mark.asyncio
-async def test_regenerate_pdf_not_found(client, admin_headers):
+async def test_regenerate_pdf_not_found(client, admin_headers, mock_db):
     """Test regenerating PDF for non-existent entry."""
-    with patch("src.api.admin.get_db") as mock_get_db:
-        mock_db = Mock(spec=Session)
-        mock_get_db.return_value = mock_db
+    mock_db.execute.return_value.scalar_one_or_none.return_value = None
 
-        mock_db.execute.return_value.scalar_one_or_none.return_value = None
+    response = client.post(
+        f"/api/v1/admin/manual-resolution/{uuid4()}/regenerate",
+        headers=admin_headers
+    )
 
-        response = client.post(
-            f"/api/v1/admin/manual-resolution/{uuid4()}/regenerate",
-            headers=admin_headers
-        )
-
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio
-async def test_refund_success(client, admin_headers, mock_manual_resolution_entries):
+async def test_refund_success(client, admin_headers, mock_db, mock_manual_resolution_entries):
     """Test successfully issuing refund."""
     entry = mock_manual_resolution_entries[0]
 
-    with patch("src.api.admin.get_db") as mock_get_db:
-        mock_db = Mock(spec=Session)
-        mock_get_db.return_value = mock_db
+    mock_db.execute.return_value.scalar_one_or_none.return_value = entry
 
-        mock_db.execute.return_value.scalar_one_or_none.return_value = entry
+    response = client.post(
+        f"/api/v1/admin/manual-resolution/{entry.id}/refund",
+        headers=admin_headers
+    )
 
-        response = client.post(
-            f"/api/v1/admin/manual-resolution/{entry.id}/refund",
-            headers=admin_headers
-        )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
 
-        assert response.status_code == status.HTTP_200_OK
-        data = response.json()
-
-        assert data["success"] is True
-        assert data["entry_id"] == entry.id
-        assert data["updated_status"] == "sla_missed_refunded"
+    assert data["success"] is True
+    assert data["entry_id"] == entry.id
+    assert data["updated_status"] == "sla_missed_refunded"
 
 
 @pytest.mark.asyncio
-async def test_refund_not_found(client, admin_headers):
+async def test_refund_not_found(client, admin_headers, mock_db):
     """Test refunding non-existent entry."""
-    with patch("src.api.admin.get_db") as mock_get_db:
-        mock_db = Mock(spec=Session)
-        mock_get_db.return_value = mock_db
+    mock_db.execute.return_value.scalar_one_or_none.return_value = None
 
-        mock_db.execute.return_value.scalar_one_or_none.return_value = None
+    response = client.post(
+        f"/api/v1/admin/manual-resolution/{uuid4()}/refund",
+        headers=admin_headers
+    )
 
-        response = client.post(
-            f"/api/v1/admin/manual-resolution/{uuid4()}/refund",
-            headers=admin_headers
-        )
-
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.asyncio

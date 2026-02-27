@@ -26,6 +26,7 @@ Usage:
 import os
 import ssl
 import logging
+from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -248,6 +249,48 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             # Ensure session is closed
+            await session.close()
+
+
+@asynccontextmanager
+async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Async context manager for database session management in non-FastAPI contexts.
+
+    Use this when you need a database session outside of a FastAPI dependency
+    injection context (e.g., background tasks, scheduled jobs, service functions
+    called directly from other services).
+
+    Unlike ``get_db`` (which is an async generator for FastAPI's Depends),
+    this function is a proper async context manager and supports the
+    ``async with`` statement.
+
+    Usage::
+
+        async with get_db_context() as session:
+            result = await session.execute(select(User))
+            users = result.scalars().all()
+
+    Yields:
+        AsyncSession: Database session
+
+    Raises:
+        RuntimeError: If database not initialized (call init_db() first)
+    """
+    if _async_session_factory is None:
+        raise RuntimeError(
+            "Database not initialized. Call init_db() during application startup."
+        )
+
+    async with _async_session_factory() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Database transaction error: {str(e)}", exc_info=True)
+            raise
+        finally:
             await session.close()
 
 

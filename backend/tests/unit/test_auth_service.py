@@ -110,12 +110,14 @@ class TestAccessToken:
 
         token = create_access_token(user_id=user_id, email=email)
 
-        # Tamper with token (change last character)
-        tampered_token = token[:-1] + "X"
+        # Tamper with the signature segment (third part after splitting on '.')
+        # Replace the entire signature with a bogus value to guarantee failure.
+        header, payload_part, _ = token.split(".")
+        tampered_token = f"{header}.{payload_part}.invalidsignatureXXXXXXXXXXXXXX"
 
-        payload = verify_access_token(tampered_token)
+        result = verify_access_token(tampered_token)
 
-        assert payload is None
+        assert result is None
 
 
 class TestSignupToken:
@@ -198,8 +200,9 @@ class TestSignupToken:
 
         token = create_signup_token(email=email)
 
-        # Tamper with token
-        tampered_token = token[:-1] + "X"
+        # Replace the signature segment entirely to guarantee verification failure.
+        header, payload_part, _ = token.split(".")
+        tampered_token = f"{header}.{payload_part}.invalidsignatureXXXXXXXXXXXXXX"
 
         payload = verify_signup_token(tampered_token)
 

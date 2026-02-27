@@ -56,17 +56,13 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
-from passlib.context import CryptContext
+import bcrypt
 from jose import JWTError, jwt
 
 from src.lib.email_utils import normalize_email
 
 # Configure logging
 logger = logging.getLogger(__name__)
-
-# Password hashing configuration
-# Using bcrypt with auto-salting (12 rounds default, secure for 2026)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT configuration
 # Load from environment (required for production)
@@ -111,14 +107,17 @@ def hash_password(password: str) -> str:
     Reference:
         research.md lines 1306-1450 (Password hashing best practices)
     """
-    return pwd_context.hash(password)
+    password_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt(rounds=12)
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verify a password against its bcrypt hash.
 
-    Uses constant-time comparison internally (via passlib) to prevent timing attacks.
+    Uses bcrypt's constant-time comparison to prevent timing attacks.
 
     Args:
         plain_password: User-provided password to verify
@@ -143,7 +142,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         research.md lines 1306-1450 (Password verification)
     """
     try:
-        return pwd_context.verify(plain_password, hashed_password)
+        password_bytes = plain_password.encode("utf-8")
+        hashed_bytes = hashed_password.encode("utf-8")
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
     except Exception as e:
         # Invalid hash format or verification error
         logger.error(f"Password verification error: {e}")

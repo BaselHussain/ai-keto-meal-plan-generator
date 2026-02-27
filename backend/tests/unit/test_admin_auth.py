@@ -125,9 +125,11 @@ def test_get_client_ip_direct_connection(mock_request):
 
 def test_get_client_ip_x_forwarded_for(mock_request):
     """Test extracting IP from X-Forwarded-For header (proxy)."""
-    mock_request.headers.get = Mock(
+    headers_mock = Mock()
+    headers_mock.get = Mock(
         side_effect=lambda key: "203.0.113.5, 198.51.100.10" if key == "X-Forwarded-For" else None
     )
+    mock_request.headers = headers_mock
 
     ip = get_client_ip(mock_request)
     assert ip == "203.0.113.5"  # First IP in chain
@@ -135,9 +137,11 @@ def test_get_client_ip_x_forwarded_for(mock_request):
 
 def test_get_client_ip_x_real_ip(mock_request):
     """Test extracting IP from X-Real-IP header."""
-    mock_request.headers.get = Mock(
+    headers_mock = Mock()
+    headers_mock.get = Mock(
         side_effect=lambda key: "203.0.113.5" if key == "X-Real-IP" else None
     )
+    mock_request.headers = headers_mock
 
     ip = get_client_ip(mock_request)
     assert ip == "203.0.113.5"
