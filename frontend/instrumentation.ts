@@ -1,6 +1,7 @@
-import * as Sentry from "@sentry/nextjs";
-
 export async function register() {
+  // Skip Sentry in development (Windows symlink permission issue with Turbopack)
+  if (process.env.NODE_ENV === "development") return;
+
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config");
   }
@@ -10,4 +11,9 @@ export async function register() {
   }
 }
 
-export const onRequestError = Sentry.captureRequestError;
+export async function onRequestError(...args: unknown[]) {
+  if (process.env.NODE_ENV === "development") return;
+  const { captureRequestError } = await import("@sentry/nextjs");
+  // @ts-expect-error - dynamic import typing
+  return captureRequestError(...args);
+}

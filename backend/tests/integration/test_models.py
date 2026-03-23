@@ -164,8 +164,8 @@ async def test_user_delete(test_session: AsyncSession):
 async def test_user_unique_email_constraint(test_session: AsyncSession):
     """Test that duplicate emails are rejected."""
     user1 = User(
-        email="duplicate@example.com",
-        normalized_email=normalize_email("duplicate@example.com"),
+        email="constraint_test_dup@example.com",
+        normalized_email=normalize_email("constraint_test_dup@example.com"),
         password_hash="hash1",
     )
     test_session.add(user1)
@@ -173,8 +173,8 @@ async def test_user_unique_email_constraint(test_session: AsyncSession):
 
     # Try to create user with same email
     user2 = User(
-        email="duplicate@example.com",
-        normalized_email=normalize_email("duplicate@example.com"),
+        email="constraint_test_dup@example.com",
+        normalized_email=normalize_email("constraint_test_dup@example.com"),
         password_hash="hash2",
     )
     test_session.add(user2)
@@ -330,9 +330,12 @@ async def test_quiz_response_jsonb_query(test_session: AsyncSession):
     test_session.add_all([quiz1, quiz2])
     await test_session.flush()
 
-    # Query by JSONB field (step_1 = "female")
+    # Query by JSONB field (step_1 = "female") scoped to this test's records only.
+    # The shared SQLite DB may have other records from previous tests, so we
+    # filter by the specific emails created in this test to avoid count mismatches.
     stmt = select(QuizResponse).where(
-        QuizResponse.quiz_data["step_1"].astext == "female"
+        QuizResponse.quiz_data["step_1"].astext == "female",
+        QuizResponse.email.in_(["jsonb1@example.com", "jsonb2@example.com"]),
     )
     result = await test_session.execute(stmt)
     female_quizzes = result.scalars().all()
@@ -499,9 +502,12 @@ async def test_meal_plan_jsonb_query_preferences(test_session: AsyncSession):
     test_session.add_all([meal_plan1, meal_plan2])
     await test_session.flush()
 
-    # Query by JSONB field - check if preferred_proteins contains "chicken"
+    # Query by JSONB field - check if preferred_proteins contains "chicken".
+    # Scope to this test's records by payment_id to avoid count mismatches from
+    # other tests that have committed records to the shared SQLite DB.
     stmt = select(MealPlan).where(
-        MealPlan.preferences_summary["preferred_proteins"].astext.contains("chicken")
+        MealPlan.preferences_summary["preferred_proteins"].astext.contains("chicken"),
+        MealPlan.payment_id.in_(["txn_pref1", "txn_pref2"]),
     )
     result = await test_session.execute(stmt)
     chicken_plans = result.scalars().all()
@@ -712,8 +718,13 @@ async def test_manual_resolution_query_by_status(test_session: AsyncSession):
     test_session.add_all([resolution1, resolution2])
     await test_session.flush()
 
-    # Query pending resolutions
-    stmt = select(ManualResolution).where(ManualResolution.status == "pending")
+    # Query pending resolutions scoped to this test's records by payment_id.
+    # The shared SQLite DB accumulates records from prior tests, so we must
+    # filter to avoid count mismatches on global queries.
+    stmt = select(ManualResolution).where(
+        ManualResolution.status == "pending",
+        ManualResolution.payment_id.in_(["txn_status1", "txn_status2"]),
+    )
     result = await test_session.execute(stmt)
     pending = result.scalars().all()
 
@@ -895,13 +906,21 @@ async def test_email_blacklist_query_active(test_session: AsyncSession):
     test_session.add_all([active, expired])
     await test_session.flush()
 
-    # Query active blacklists (expires_at > now)
-    stmt = select(EmailBlacklist).where(EmailBlacklist.expires_at > now)
+    # Query active blacklists (expires_at > now) scoped to this test's records.
+    # The shared SQLite DB accumulates records from prior tests, so filter by
+    # the specific normalized emails created in this test.
+    stmt = select(EmailBlacklist).where(
+        EmailBlacklist.expires_at > now,
+        EmailBlacklist.normalized_email.in_([
+            normalize_email("active@example.com"),
+            normalize_email("expired@example.com"),
+        ]),
+    )
     result = await test_session.execute(stmt)
     active_entries = result.scalars().all()
 
     assert len(active_entries) == 1
-    assert active_entries[0].normalized_email == "active@example.com"
+    assert active_entries[0].normalized_email == normalize_email("active@example.com")
 
 
 # ============================================================================
@@ -985,9 +1004,10 @@ async def test_jsonb_nested_query(test_session: AsyncSession):
     test_session.add_all([quiz1, quiz2])
     await test_session.flush()
 
-    # Query by nested JSONB field (goal = "weight_loss")
+    # Query by nested JSONB field (goal = "weight_loss"), scoped to test emails
     stmt = select(QuizResponse).where(
-        QuizResponse.quiz_data["step_20"]["goal"].astext == "weight_loss"
+        QuizResponse.quiz_data["step_20"]["goal"].astext == "weight_loss",
+        QuizResponse.email.in_(["nested1@example.com", "nested2@example.com"]),
     )
     result = await test_session.execute(stmt)
     weight_loss_quizzes = result.scalars().all()

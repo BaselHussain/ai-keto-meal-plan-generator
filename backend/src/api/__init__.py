@@ -28,6 +28,8 @@ from src.api.recovery import router as recovery_router
 from src.api.auth import router as auth_router
 from src.api.download import router as download_router
 from src.api.admin import router as admin_router
+from src.api.pdf import router as pdf_router
+from src.api.blog import router as blog_router
 
 # Create main API router
 api_router = APIRouter()
@@ -39,6 +41,8 @@ api_router.include_router(verification_router, tags=["Verification"])
 api_router.include_router(recovery_router, tags=["Recovery"])
 api_router.include_router(auth_router, tags=["Authentication"])
 api_router.include_router(download_router, tags=["Download"])
+api_router.include_router(pdf_router, tags=["PDF Generation"])
+api_router.include_router(blog_router, tags=["Blog"])
 api_router.include_router(admin_router, tags=["Admin"])
 
 # Dev-only router (NOT available in production)
