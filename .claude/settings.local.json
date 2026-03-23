@@ -5,7 +5,9 @@
       "Bash(pytest:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run build:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(npx shadcn-ui@latest:*)",
+      "Bash(npx shadcn@latest:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
